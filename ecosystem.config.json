@@ -3,7 +3,7 @@
     "name": "discord-bot",
     "script": "bot.py",
     "interpreter": "./venv/bin/python3",
-    "cwd": "/home/USER_PLACEHOLDER/discord-bot",
+    "cwd": "/home/tanya/resploot",
     "instances": 1,
     "autorestart": true,
     "watch": false,
