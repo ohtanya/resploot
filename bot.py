@@ -1,6 +1,7 @@
 import os
 import discord
 from discord.ext import commands, tasks
+from discord import app_commands
 import datetime
 import pytz
 import json
@@ -61,7 +62,16 @@ async def on_ready():
         for channel_name, schedule in scheduled_resets.items():
             print(f"  - {channel_name} ({schedule['type']}): {schedule['hour']:02d}:{schedule['minute']:02d}")
     else:
-        print("No scheduled resets configured. Use !schedule_reset to add some!")
+        print("No scheduled resets configured. Use /schedule_reset to add some!")
+    
+    # Sync slash commands
+    try:
+        guild = discord.Object(id=GUILD_ID)
+        bot.tree.copy_global_to(guild=guild)
+        synced = await bot.tree.sync(guild=guild)
+        print(f"Synced {len(synced)} slash commands to guild")
+    except Exception as e:
+        print(f"Failed to sync commands: {e}")
     
     reset_scheduler.start()
 
@@ -178,19 +188,26 @@ async def reset_channel_by_name(guild, channel_name, schedule):
     print(f"Created {channel_type} channel: {channel_name}")
     return new_channel
 
-@bot.command(name='ping')
-async def ping_command(ctx):
+# Slash Commands
+@bot.tree.command(name="ping", description="Test if the bot is online")
+async def ping_slash(interaction: discord.Interaction):
     """Simple ping command to test if bot is responding"""
-    await ctx.send("🏓 Pong! Bot is online and ready!")
+    await interaction.response.send_message("🏓 Pong! Bot is online and ready!")
 
-@bot.command(name='schedule_reset')
-async def schedule_reset_command(ctx, channel_name: str, channel_type: str, time: str, category: str = None):
+@bot.tree.command(name="schedule_reset", description="Schedule a daily reset for a channel")
+@app_commands.describe(
+    channel_name="Name of the channel to reset (without #)",
+    channel_type="Type of channel",
+    time="Time in HH:MM format (e.g., 10:42, 04:30)", 
+    category="Category to place the channel in (optional)"
+)
+@app_commands.choices(channel_type=[
+    discord.app_commands.Choice(name="Text Channel", value="text"),
+    discord.app_commands.Choice(name="Voice Channel", value="voice")
+])
+async def schedule_reset_slash(interaction: discord.Interaction, channel_name: str, channel_type: str, time: str, category: str = None):
     """
     Schedule a daily reset for a channel
-    Usage: !schedule_reset <channel_name> <text|voice> <time> [category]
-    Usage: @resploot schedule_reset <channel_name> <text|voice> <time> [category]
-    Example: !schedule_reset daily-chat text 04:30
-    Example: !schedule_reset daily-yap voice 10:42 "Voice Channels"
     """
     # Parse time in HH:MM format
     try:
@@ -203,20 +220,20 @@ async def schedule_reset_command(ctx, channel_name: str, channel_type: str, time
             hour = int(time)
             minute = 0
     except ValueError:
-        await ctx.send("❌ Invalid time format. Use HH:MM (e.g., 10:42 or 04:30)")
+        await interaction.response.send_message("❌ Invalid time format. Use HH:MM (e.g., 10:42 or 04:30)", ephemeral=True)
         return
     
     # Validate inputs
     if channel_type.lower() not in ['text', 'voice']:
-        await ctx.send("❌ Channel type must be 'text' or 'voice'")
+        await interaction.response.send_message("❌ Channel type must be 'text' or 'voice'", ephemeral=True)
         return
     
     if not (0 <= hour <= 23):
-        await ctx.send("❌ Hour must be between 0 and 23")
+        await interaction.response.send_message("❌ Hour must be between 0 and 23", ephemeral=True)
         return
     
     if not (0 <= minute <= 59):
-        await ctx.send("❌ Minute must be between 0 and 59")
+        await interaction.response.send_message("❌ Minute must be between 0 and 59", ephemeral=True)
         return
     
     # Clean channel name (remove # if present)
@@ -235,8 +252,8 @@ async def schedule_reset_command(ctx, channel_name: str, channel_type: str, time
     save_schedules()
     
     category_text = f" in category '{category}'" if category else ""
-    await ctx.send(f"✅ Scheduled daily reset for **{channel_name}** ({channel_type}){category_text} at **{hour:02d}:{minute:02d}** {TIMEZONE}")
-    print(f"Scheduled reset added by {ctx.author}: {channel_name} at {hour:02d}:{minute:02d}")
+    await interaction.response.send_message(f"✅ Scheduled daily reset for **{channel_name}** ({channel_type}){category_text} at **{hour:02d}:{minute:02d}** {TIMEZONE}")
+    print(f"Scheduled reset added by {interaction.user}: {channel_name} at {hour:02d}:{minute:02d}")
 
 @bot.command(name='list_schedules')
 async def list_schedules_command(ctx):
