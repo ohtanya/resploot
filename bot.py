@@ -12,6 +12,7 @@ TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 # Bot setup
 intents = discord.Intents.default()
+intents.message_content = True  # Required to read message content for commands
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Configuration
@@ -63,6 +64,54 @@ async def on_ready():
         print("No scheduled resets configured. Use !schedule_reset to add some!")
     
     reset_scheduler.start()
+
+@bot.event
+async def on_message(message):
+    """Handle bot mentions for commands"""
+    # Don't respond to our own messages
+    if message.author == bot.user:
+        return
+    
+    # Check if bot is mentioned
+    if bot.user.mentioned_in(message):
+        content = message.content.replace(f'<@{bot.user.id}>', '').replace(f'<@!{bot.user.id}>', '').strip()
+        
+        # If it's just a mention without a command, show help
+        if not content:
+            embed = discord.Embed(title="👋 Hi there!", color=0x00ff00)
+            embed.add_field(
+                name="Quick Commands",
+                value="`@resploot schedule_reset daily-chat text 10:42`\n`@resploot list_schedules`\n`@resploot help_reset`",
+                inline=False
+            )
+            await message.reply(embed=embed)
+            return
+        
+        # Parse the command manually
+        parts = content.split()
+        if not parts:
+            return
+            
+        command = parts[0].lower()
+        
+        # Handle schedule_reset specially for mentions
+        if command == 'schedule_reset' and len(parts) >= 4:
+            channel_name = parts[1]
+            channel_type = parts[2]
+            time = parts[3]
+            category = ' '.join(parts[4:]) if len(parts) > 4 else None
+            
+            # Remove quotes from category if present
+            if category and category.startswith('"') and category.endswith('"'):
+                category = category[1:-1]
+            
+            # Create a fake context for the command
+            ctx = await bot.get_context(message)
+            await schedule_reset_command(ctx, channel_name, channel_type, time, category)
+            return
+    
+    # Process normal commands
+    await bot.process_commands(message)
 
 @tasks.loop(minutes=1)
 async def reset_scheduler():
@@ -129,14 +178,34 @@ async def reset_channel_by_name(guild, channel_name, schedule):
     print(f"Created {channel_type} channel: {channel_name}")
     return new_channel
 
+@bot.command(name='ping')
+async def ping_command(ctx):
+    """Simple ping command to test if bot is responding"""
+    await ctx.send("🏓 Pong! Bot is online and ready!")
+
 @bot.command(name='schedule_reset')
-async def schedule_reset_command(ctx, channel_name: str, channel_type: str, hour: int, minute: int, category: str = None):
+async def schedule_reset_command(ctx, channel_name: str, channel_type: str, time: str, category: str = None):
     """
     Schedule a daily reset for a channel
-    Usage: !schedule_reset <channel_name> <text|voice> <hour> <minute> [category]
-    Example: !schedule_reset daily-chat text 4 30
-    Example: !schedule_reset daily-yap voice 4 30 "Voice Channels"
+    Usage: !schedule_reset <channel_name> <text|voice> <time> [category]
+    Usage: @resploot schedule_reset <channel_name> <text|voice> <time> [category]
+    Example: !schedule_reset daily-chat text 04:30
+    Example: !schedule_reset daily-yap voice 10:42 "Voice Channels"
     """
+    # Parse time in HH:MM format
+    try:
+        if ':' in time:
+            hour_str, minute_str = time.split(':')
+            hour = int(hour_str)
+            minute = int(minute_str)
+        else:
+            # Fallback for old format (just hour)
+            hour = int(time)
+            minute = 0
+    except ValueError:
+        await ctx.send("❌ Invalid time format. Use HH:MM (e.g., 10:42 or 04:30)")
+        return
+    
     # Validate inputs
     if channel_type.lower() not in ['text', 'voice']:
         await ctx.send("❌ Channel type must be 'text' or 'voice'")
@@ -315,32 +384,29 @@ async def help_reset_command(ctx):
     embed = discord.Embed(title="🔄 Channel Reset Bot Commands", color=0x00ff00)
     
     embed.add_field(
-        name="!schedule_reset",
-        value="Schedule a daily reset for a channel\n`!schedule_reset daily-chat text 4 30`\n`!schedule_reset daily-yap voice 4 30 \"Voice Channels\"`",
+        name="Schedule Reset",
+        value="**Command:** `!schedule_reset` or `@resploot schedule_reset`\n"
+              "**Usage:** `schedule_reset daily-chat text 10:42`\n"
+              "**With category:** `schedule_reset daily-yap voice 04:30 \"Voice Channels\"`\n"
+              "**Time format:** HH:MM (24-hour)",
         inline=False
     )
     
     embed.add_field(
-        name="!list_schedules",
-        value="Show all scheduled resets",
+        name="Other Commands",
+        value="`!list_schedules` - Show all scheduled resets\n"
+              "`!remove_schedule daily-chat` - Remove a schedule\n"
+              "`!reset_now daily-chat` - Manual reset\n"
+              "`!next_reset` - Show next reset times\n"
+              "`!ping` - Test if bot is online",
         inline=False
     )
     
     embed.add_field(
-        name="!remove_schedule",
-        value="Remove a scheduled reset\n`!remove_schedule daily-chat`",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="!reset_now",
-        value="Manually trigger a reset\n`!reset_now daily-chat`",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="!next_reset",
-        value="Show next reset times\n`!next_reset` (all) or `!next_reset daily-chat`",
+        name="Bot Mention Examples",
+        value="`@resploot schedule_reset morning-coffee text 07:00`\n"
+              "`@resploot list_schedules`\n"
+              "`@resploot` (for quick help)",
         inline=False
     )
     
