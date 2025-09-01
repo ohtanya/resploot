@@ -8,8 +8,9 @@ A Discord bot that automatically resets daily chat channels at a specified time 
 - Automatically deletes and recreates a voice channel (`daily-yap`) in the Voice Channels category
 - Configurable reset time (currently set to 4:30 AM)
 - Simple logging for monitoring bot activity
+- PM2 process management for production deployment
 
-## Setup
+## Local Development
 
 1. Install Python dependencies:
    ```bash
@@ -31,6 +32,35 @@ A Discord bot that automatically resets daily chat channels at a specified time 
    python3 bot.py
    ```
 
+## Production Deployment (VPS with PM2)
+
+1. Run the deployment script on your VPS:
+   ```bash
+   curl -sSL https://raw.githubusercontent.com/ohtanya/resploot/main/deploy.sh | bash
+   ```
+
+2. Set up your environment:
+   ```bash
+   cd discord-bot
+   cp .env.example .env
+   nano .env  # Add your Discord bot token
+   ```
+
+3. Start with PM2:
+   ```bash
+   pm2 start ecosystem.config.json
+   pm2 save
+   pm2 startup  # Follow the instructions to enable auto-start
+   ```
+
+## PM2 Management Commands
+
+- `pm2 status` - View running processes
+- `pm2 logs discord-bot` - View logs in real-time
+- `pm2 restart discord-bot` - Restart the bot
+- `pm2 stop discord-bot` - Stop the bot
+- `pm2 delete discord-bot` - Remove from PM2
+
 ## Configuration
 
 - `GUILD_ID`: Your Discord server ID
@@ -44,6 +74,7 @@ A Discord bot that automatically resets daily chat channels at a specified time 
 - Python 3.7+
 - discord.py
 - python-dotenv
+- PM2 (for production deployment)
 
 ## Bot Permissions
 
