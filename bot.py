@@ -20,7 +20,7 @@ GUILD_ID = 1411611160263790626  # replace with your server ID
 TIMEZONE = "America/Los_Angeles"  # Change this to your timezone
 SCHEDULES_FILE = "schedules.json"
 
-# Dictionary to store scheduled resets
+# Dictionary to store scheduled resets: {channel_name: [{'hour': X, 'minute': Y, 'type': 'text/voice', 'category': 'category_name', 'last_reset': 'YYYY-MM-DD-HH:MM'}]}
 scheduled_resets = {}
 
 def load_schedules():
@@ -28,8 +28,26 @@ def load_schedules():
     global scheduled_resets
     try:
         with open(SCHEDULES_FILE, 'r') as f:
-            scheduled_resets = json.load(f)
-        print(f"Loaded {len(scheduled_resets)} scheduled resets")
+            data = json.load(f)
+        
+        # Migrate old format to new format if needed
+        migrated = {}
+        for channel_name, schedule_data in data.items():
+            if isinstance(schedule_data, dict) and 'hour' in schedule_data:
+                # Old format: single schedule per channel
+                migrated[channel_name] = [schedule_data]
+            elif isinstance(schedule_data, list):
+                # New format: list of schedules per channel
+                migrated[channel_name] = schedule_data
+            else:
+                # Invalid format, skip
+                print(f"Skipping invalid schedule data for {channel_name}")
+                continue
+        
+        scheduled_resets = migrated
+        total_schedules = sum(len(schedules) for schedules in scheduled_resets.values())
+        print(f"Loaded {total_schedules} scheduled resets across {len(scheduled_resets)} channels")
+        
     except FileNotFoundError:
         scheduled_resets = {}
         print("No schedules file found, starting with empty schedules")
@@ -58,8 +76,10 @@ async def on_ready():
     
     if scheduled_resets:
         print(f"Active schedules:")
-        for channel_name, schedule in scheduled_resets.items():
-            print(f"  - {channel_name} ({schedule['type']}): {schedule['hour']:02d}:{schedule['minute']:02d}")
+        for channel_name, schedules in scheduled_resets.items():
+            for i, schedule in enumerate(schedules):
+                schedule_id = f"{i+1}" if len(schedules) > 1 else ""
+                print(f"  - {channel_name}{schedule_id} ({schedule['type']}): {schedule['hour']:02d}:{schedule['minute']:02d}")
     else:
         print("No scheduled resets configured. Use /schedule_reset to add some!")
     
@@ -90,25 +110,27 @@ async def reset_scheduler():
         return
     
     # Check each scheduled reset
-    for channel_name, schedule in scheduled_resets.items():
-        # Check if it's time to reset and we haven't reset today
-        if (now.hour == schedule['hour'] and 
-            now.minute == schedule['minute'] and 
-            schedule.get('last_reset') != current_date):
-            
-            print(f"Starting scheduled reset for {channel_name} at {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-            
-            try:
-                await reset_channel_by_name(guild, channel_name, schedule)
+    for channel_name, schedules in scheduled_resets.items():
+        for schedule_index, schedule in enumerate(schedules):
+            # Check if it's time to reset and we haven't reset at this specific time today
+            schedule_key = f"{current_date}-{schedule['hour']:02d}:{schedule['minute']:02d}"
+            if (now.hour == schedule['hour'] and 
+                now.minute == schedule['minute'] and 
+                schedule.get('last_reset') != schedule_key):
                 
-                # Update last reset date
-                schedule['last_reset'] = current_date
-                save_schedules()
+                print(f"Starting scheduled reset for {channel_name} (schedule {schedule_index+1}) at {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
                 
-                print(f"Reset completed for {channel_name}")
-                
-            except Exception as e:
-                print(f"Error during scheduled reset of {channel_name}: {e}")
+                try:
+                    await reset_channel_by_name(guild, channel_name, schedule)
+                    
+                    # Update last reset date with specific time
+                    schedule['last_reset'] = schedule_key
+                    save_schedules()
+                    
+                    print(f"Reset completed for {channel_name}")
+                    
+                except Exception as e:
+                    print(f"Error during scheduled reset of {channel_name}: {e}")
 
 async def reset_channel_by_name(guild, channel_name, schedule):
     """Reset a specific channel based on its schedule configuration"""
@@ -185,8 +207,8 @@ async def schedule_reset_slash(interaction: discord.Interaction, channel_name: s
     if channel_name.startswith('#'):
         channel_name = channel_name[1:]
     
-    # Store the schedule
-    scheduled_resets[channel_name] = {
+    # Create new schedule entry
+    new_schedule = {
         'type': channel_type.lower(),
         'hour': hour,
         'minute': minute,
@@ -194,11 +216,20 @@ async def schedule_reset_slash(interaction: discord.Interaction, channel_name: s
         'last_reset': None
     }
     
+    # Add to existing schedules for this channel or create new list
+    if channel_name not in scheduled_resets:
+        scheduled_resets[channel_name] = []
+    
+    scheduled_resets[channel_name].append(new_schedule)
     save_schedules()
     
+    schedule_count = len(scheduled_resets[channel_name])
     category_text = f" in category '{category}'" if category else ""
-    await interaction.response.send_message(f"✅ Scheduled daily reset for **{channel_name}** ({channel_type}){category_text} at **{hour:02d}:{minute:02d}** {TIMEZONE}")
-    print(f"Scheduled reset added by {interaction.user}: {channel_name} at {hour:02d}:{minute:02d}")
+    await interaction.response.send_message(
+        f"✅ Added schedule #{schedule_count} for **{channel_name}** ({channel_type}){category_text} at **{hour:02d}:{minute:02d}** {TIMEZONE}\n"
+        f"This channel now has {schedule_count} reset(s) per day."
+    )
+    print(f"Scheduled reset added by {interaction.user}: {channel_name} at {hour:02d}:{minute:02d} (#{schedule_count})")
 
 @bot.tree.command(name="list_schedules", description="Show all scheduled channel resets")
 async def list_schedules_slash(interaction: discord.Interaction):
@@ -209,34 +240,79 @@ async def list_schedules_slash(interaction: discord.Interaction):
     
     embed = discord.Embed(title="📅 Scheduled Channel Resets", color=0x00ff00)
     
-    for channel_name, schedule in scheduled_resets.items():
-        last_reset = schedule.get('last_reset', 'Never')
-        
-        embed.add_field(
-            name=f"#{channel_name} ({schedule['type']})",
-            value=f"**Time:** {schedule['hour']:02d}:{schedule['minute']:02d} {TIMEZONE}\n**Category:** {schedule['category'] or 'Default'}\n**Last Reset:** {last_reset}",
-            inline=True
-        )
+    for channel_name, schedules in scheduled_resets.items():
+        if len(schedules) == 1:
+            # Single schedule - keep simple format
+            schedule = schedules[0]
+            last_reset = schedule.get('last_reset', 'Never')
+            if last_reset and '-' in last_reset and last_reset.count('-') >= 3:
+                # New format: YYYY-MM-DD-HH:MM
+                last_reset = last_reset.split('-', 3)[-1] if len(last_reset.split('-', 3)) > 3 else last_reset
+            
+            embed.add_field(
+                name=f"#{channel_name} ({schedule['type']})",
+                value=f"**Time:** {schedule['hour']:02d}:{schedule['minute']:02d} {TIMEZONE}\n**Category:** {schedule['category'] or 'Default'}\n**Last Reset:** {last_reset}",
+                inline=True
+            )
+        else:
+            # Multiple schedules - show all times
+            times = []
+            for i, schedule in enumerate(schedules):
+                times.append(f"{i+1}. {schedule['hour']:02d}:{schedule['minute']:02d}")
+            
+            embed.add_field(
+                name=f"#{channel_name} ({schedules[0]['type']}) - {len(schedules)} resets",
+                value=f"**Times:** {', '.join(times)}\n**Category:** {schedules[0]['category'] or 'Default'}",
+                inline=True
+            )
     
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="remove_schedule", description="Remove a scheduled reset")
-@app_commands.describe(channel_name="Name of the channel to remove from schedule")
-async def remove_schedule_slash(interaction: discord.Interaction, channel_name: str):
-    """Remove a scheduled reset"""
+@bot.tree.command(name="remove_schedule", description="Remove scheduled resets for a channel")
+@app_commands.describe(
+    channel_name="Name of the channel to remove from schedule",
+    schedule_index="Schedule number to remove (leave empty to remove all schedules for this channel)"
+)
+async def remove_schedule_slash(interaction: discord.Interaction, channel_name: str, schedule_index: int = None):
+    """Remove a scheduled reset or all schedules for a channel"""
     # Clean channel name
     if channel_name.startswith('#'):
         channel_name = channel_name[1:]
     
     if channel_name not in scheduled_resets:
-        await interaction.response.send_message(f"❌ No scheduled reset found for **{channel_name}**", ephemeral=True)
+        await interaction.response.send_message(f"❌ No scheduled resets found for **{channel_name}**", ephemeral=True)
         return
     
-    del scheduled_resets[channel_name]
-    save_schedules()
+    schedules = scheduled_resets[channel_name]
     
-    await interaction.response.send_message(f"✅ Removed scheduled reset for **{channel_name}**")
-    print(f"Schedule removed by {interaction.user}: {channel_name}")
+    if schedule_index is None:
+        # Remove all schedules for this channel
+        del scheduled_resets[channel_name]
+        save_schedules()
+        await interaction.response.send_message(f"✅ Removed all {len(schedules)} scheduled reset(s) for **{channel_name}**")
+        print(f"All schedules removed by {interaction.user}: {channel_name}")
+    else:
+        # Remove specific schedule by index
+        if schedule_index < 1 or schedule_index > len(schedules):
+            await interaction.response.send_message(f"❌ Invalid schedule number. **{channel_name}** has {len(schedules)} schedule(s) (1-{len(schedules)})", ephemeral=True)
+            return
+        
+        removed_schedule = schedules.pop(schedule_index - 1)  # Convert to 0-based index
+        
+        if not schedules:  # If no schedules left, remove the channel entirely
+            del scheduled_resets[channel_name]
+        
+        save_schedules()
+        
+        time_str = f"{removed_schedule['hour']:02d}:{removed_schedule['minute']:02d}"
+        remaining = len(schedules) if schedules else 0
+        
+        if remaining > 0:
+            await interaction.response.send_message(f"✅ Removed schedule #{schedule_index} ({time_str}) for **{channel_name}**. {remaining} schedule(s) remaining.")
+        else:
+            await interaction.response.send_message(f"✅ Removed schedule #{schedule_index} ({time_str}) for **{channel_name}**. No schedules remaining.")
+        
+        print(f"Schedule #{schedule_index} removed by {interaction.user}: {channel_name} at {time_str}")
 
 @bot.tree.command(name="reset_now", description="Manually trigger a channel reset")
 @app_commands.describe(channel_name="Name of the channel to reset")
@@ -259,16 +335,22 @@ async def reset_now_slash(interaction: discord.Interaction, channel_name: str):
             await interaction.edit_original_response(content="❌ Guild not found!")
             return
         
-        schedule = scheduled_resets[channel_name]
+        # Use the first schedule for channel properties (type, category)
+        # All schedules for a channel should have the same type and category
+        schedule = scheduled_resets[channel_name][0]
         await reset_channel_by_name(guild, channel_name, schedule)
         
-        # Update last reset date
+        # Update last reset date for all schedules of this channel
         tz = pytz.timezone(TIMEZONE)
         now = datetime.datetime.now(tz)
-        schedule['last_reset'] = now.strftime('%Y-%m-%d')
+        reset_key = f"{now.strftime('%Y-%m-%d')}-MANUAL"
+        
+        for schedule in scheduled_resets[channel_name]:
+            schedule['last_reset'] = reset_key
         save_schedules()
         
-        await interaction.edit_original_response(content=f"✅ **{channel_name}** has been reset successfully!")
+        schedule_count = len(scheduled_resets[channel_name])
+        await interaction.edit_original_response(content=f"✅ **{channel_name}** has been reset successfully! ({schedule_count} schedule(s) updated)")
         print(f"Manual reset triggered by {interaction.user}: {channel_name}")
         
     except Exception as e:
@@ -291,23 +373,11 @@ async def next_reset_slash(interaction: discord.Interaction, channel_name: str =
             await interaction.response.send_message(f"❌ **{channel_name}** is not scheduled.", ephemeral=True)
             return
         
-        schedule = scheduled_resets[channel_name]
-        today_reset = now.replace(hour=schedule['hour'], minute=schedule['minute'], second=0, microsecond=0)
+        schedules = scheduled_resets[channel_name]
+        embed = discord.Embed(title=f"⏰ Next Reset Times for #{channel_name}", color=0x0099ff)
         
-        if now >= today_reset:
-            next_reset = today_reset + datetime.timedelta(days=1)
-        else:
-            next_reset = today_reset
-        
-        await interaction.response.send_message(f"⏰ Next reset for **{channel_name}**: {next_reset.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-    else:
-        if not scheduled_resets:
-            await interaction.response.send_message("📅 No scheduled resets configured.", ephemeral=True)
-            return
-        
-        embed = discord.Embed(title="⏰ Next Reset Times", color=0x0099ff)
-        
-        for channel_name, schedule in scheduled_resets.items():
+        next_resets = []
+        for i, schedule in enumerate(schedules):
             today_reset = now.replace(hour=schedule['hour'], minute=schedule['minute'], second=0, microsecond=0)
             
             if now >= today_reset:
@@ -315,38 +385,106 @@ async def next_reset_slash(interaction: discord.Interaction, channel_name: str =
             else:
                 next_reset = today_reset
             
+            schedule_num = f"#{i+1}" if len(schedules) > 1 else ""
+            next_resets.append((next_reset, f"Schedule {schedule_num}".strip()))
+        
+        # Sort by next reset time
+        next_resets.sort(key=lambda x: x[0])
+        
+        for next_reset, label in next_resets:
             embed.add_field(
-                name=f"#{channel_name}",
-                value=next_reset.strftime('%m/%d %H:%M'),
-                inline=True
+                name=label,
+                value=next_reset.strftime('%Y-%m-%d %H:%M:%S %Z'),
+                inline=False
             )
+        
+        await interaction.response.send_message(embed=embed)
+    else:
+        if not scheduled_resets:
+            await interaction.response.send_message("📅 No scheduled resets configured.", ephemeral=True)
+            return
+        
+        embed = discord.Embed(title="⏰ Next Reset Times", color=0x0099ff)
+        
+        for channel_name, schedules in scheduled_resets.items():
+            if len(schedules) == 1:
+                # Single schedule
+                schedule = schedules[0]
+                today_reset = now.replace(hour=schedule['hour'], minute=schedule['minute'], second=0, microsecond=0)
+                
+                if now >= today_reset:
+                    next_reset = today_reset + datetime.timedelta(days=1)
+                else:
+                    next_reset = today_reset
+                
+                embed.add_field(
+                    name=f"#{channel_name}",
+                    value=next_reset.strftime('%m/%d %H:%M'),
+                    inline=True
+                )
+            else:
+                # Multiple schedules - show next one
+                next_resets = []
+                for schedule in schedules:
+                    today_reset = now.replace(hour=schedule['hour'], minute=schedule['minute'], second=0, microsecond=0)
+                    
+                    if now >= today_reset:
+                        next_reset = today_reset + datetime.timedelta(days=1)
+                    else:
+                        next_reset = today_reset
+                    
+                    next_resets.append(next_reset)
+                
+                # Show the earliest next reset
+                earliest = min(next_resets)
+                embed.add_field(
+                    name=f"#{channel_name} ({len(schedules)} resets)",
+                    value=earliest.strftime('%m/%d %H:%M'),
+                    inline=True
+                )
         
         await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="help", description="Show help for all commands")
 async def help_slash(interaction: discord.Interaction):
     """Show help for reset commands"""
-    embed = discord.Embed(title="🔄 Channel Reset Bot - Slash Commands", color=0x00ff00)
+    embed = discord.Embed(title="🔄 Channel Reset Bot - Multiple Schedules Support", color=0x00ff00)
     
     embed.add_field(
         name="/schedule_reset",
-        value="Schedule a daily reset for a channel\n**Example:** `/schedule_reset daily-chat text 10:42`\n**With category:** Add category name in the category field",
+        value="Schedule a daily reset for a channel\n**Example:** `/schedule_reset daily-chat text 10:42`\n**Multiple times:** Add as many schedules as you want per channel!\n**With category:** Add category name in the category field",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="Managing Schedules",
+        value="`/list_schedules` - Show all scheduled resets\n"
+              "`/remove_schedule channel_name` - Remove ALL schedules for channel\n"
+              "`/remove_schedule channel_name schedule_index:2` - Remove specific schedule #2\n"
+              "`/next_reset` - Show next reset times for all channels\n"
+              "`/next_reset channel_name` - Show all upcoming resets for specific channel",
         inline=False
     )
     
     embed.add_field(
         name="Other Commands",
-        value="`/list_schedules` - Show all scheduled resets\n"
-              "`/remove_schedule` - Remove a schedule\n"
-              "`/reset_now` - Manual reset\n"
-              "`/next_reset` - Show next reset times\n"
+        value="`/reset_now channel_name` - Manual reset\n"
               "`/ping` - Test if bot is online",
         inline=False
     )
     
     embed.add_field(
+        name="✨ New Features",
+        value="• **Multiple resets per day** per channel\n"
+              "• **Smart schedule management** - remove specific schedules by number\n"
+              "• **Enhanced displays** - see all times at once\n"
+              "• **Automatic migration** - old single schedules still work",
+        inline=False
+    )
+    
+    embed.add_field(
         name="Time Format",
-        value="Use 24-hour format: `04:30`, `10:42`, `23:30`",
+        value="Use 24-hour format: `04:30`, `10:42`, `16:20`, `23:30`",
         inline=False
     )
     
