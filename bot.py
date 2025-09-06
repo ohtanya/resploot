@@ -16,7 +16,7 @@ intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Configuration
-GUILD_ID = 1411611160263790626  # replace with your server ID
+GUILD_ID = None  # Set to None for global commands, or specify server ID for faster sync
 TIMEZONE = "America/Los_Angeles"  # Change this to your timezone
 SCHEDULES_FILE = "schedules.json"
 
@@ -85,10 +85,16 @@ async def on_ready():
     
     # Sync slash commands
     try:
-        guild = discord.Object(id=GUILD_ID)
-        bot.tree.copy_global_to(guild=guild)
-        synced = await bot.tree.sync(guild=guild)
-        print(f"Synced {len(synced)} slash commands to guild")
+        if GUILD_ID:
+            # Sync to specific guild (faster)
+            guild = discord.Object(id=GUILD_ID)
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+            print(f"Synced {len(synced)} slash commands to guild {GUILD_ID}")
+        else:
+            # Sync globally (takes up to 1 hour to propagate)
+            synced = await bot.tree.sync()
+            print(f"Synced {len(synced)} slash commands globally")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
     
@@ -105,32 +111,30 @@ async def reset_scheduler():
     if now.minute == 0:
         print(f"Current time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     
-    guild = bot.get_guild(GUILD_ID)
-    if not guild:
-        return
-    
-    # Check each scheduled reset
-    for channel_name, schedules in scheduled_resets.items():
-        for schedule_index, schedule in enumerate(schedules):
-            # Check if it's time to reset and we haven't reset at this specific time today
-            schedule_key = f"{current_date}-{schedule['hour']:02d}:{schedule['minute']:02d}"
-            if (now.hour == schedule['hour'] and 
-                now.minute == schedule['minute'] and 
-                schedule.get('last_reset') != schedule_key):
-                
-                print(f"Starting scheduled reset for {channel_name} (schedule {schedule_index+1}) at {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-                
-                try:
-                    await reset_channel_by_name(guild, channel_name, schedule)
+    # Check all guilds the bot is in
+    for guild in bot.guilds:
+        # Check each scheduled reset
+        for channel_name, schedules in scheduled_resets.items():
+            for schedule_index, schedule in enumerate(schedules):
+                # Check if it's time to reset and we haven't reset at this specific time today
+                schedule_key = f"{current_date}-{schedule['hour']:02d}:{schedule['minute']:02d}"
+                if (now.hour == schedule['hour'] and 
+                    now.minute == schedule['minute'] and 
+                    schedule.get('last_reset') != schedule_key):
                     
-                    # Update last reset date with specific time
-                    schedule['last_reset'] = schedule_key
-                    save_schedules()
+                    print(f"Starting scheduled reset for {channel_name} (schedule {schedule_index+1}) in {guild.name} at {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
                     
-                    print(f"Reset completed for {channel_name}")
-                    
-                except Exception as e:
-                    print(f"Error during scheduled reset of {channel_name}: {e}")
+                    try:
+                        await reset_channel_by_name(guild, channel_name, schedule)
+                        
+                        # Update last reset date with specific time
+                        schedule['last_reset'] = schedule_key
+                        save_schedules()
+                        
+                        print(f"Reset completed for {channel_name} in {guild.name}")
+                        
+                    except Exception as e:
+                        print(f"Error during scheduled reset of {channel_name} in {guild.name}: {e}")
 
 async def reset_channel_by_name(guild, channel_name, schedule):
     """Reset a specific channel based on its schedule configuration"""
@@ -330,7 +334,7 @@ async def reset_now_slash(interaction: discord.Interaction, channel_name: str):
     await interaction.response.send_message(f"🔄 Triggering manual reset for **{channel_name}**...")
     
     try:
-        guild = bot.get_guild(GUILD_ID)
+        guild = interaction.guild
         if not guild:
             await interaction.edit_original_response(content="❌ Guild not found!")
             return
