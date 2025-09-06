@@ -1,6 +1,6 @@
 {
   "apps": [{
-    "name": "discord-bot",
+    "name": "resploot",
     "script": "bot.py",
     "interpreter": "./venv/bin/python3",
     "cwd": "/home/tanya/resploot",

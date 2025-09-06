@@ -25,7 +25,7 @@ if ! command -v pm2 &> /dev/null; then
 fi
 
 # Clone the repository
-DEPLOY_DIR="/home/$USER/discord-bot"
+DEPLOY_DIR="/home/$USER/resploot"
 if [ -d "$DEPLOY_DIR" ]; then
     echo "Directory exists, pulling latest changes..."
     cd "$DEPLOY_DIR"
@@ -65,7 +65,7 @@ echo "7. pm2 startup  # Generate startup script (follow the instructions)"
 echo ""
 echo "PM2 useful commands:"
 echo "- pm2 status           # View running processes"
-echo "- pm2 logs discord-bot # View logs"
-echo "- pm2 restart discord-bot # Restart the bot"
-echo "- pm2 stop discord-bot # Stop the bot"
-echo "- pm2 delete discord-bot # Remove from PM2"
+echo "- pm2 logs resploot    # View logs"
+echo "- pm2 restart resploot # Restart the bot"
+echo "- pm2 stop resploot    # Stop the bot"
+echo "- pm2 delete resploot  # Remove from PM2"
