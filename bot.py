@@ -445,6 +445,104 @@ async def next_reset_slash(interaction: discord.Interaction, channel_name: str =
         
         await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="resploot-clear", description="Clear all messages in the current channel")
+@app_commands.describe(
+    confirm="Type 'yes' to confirm deletion of all messages in this channel"
+)
+async def clear_channel_slash(interaction: discord.Interaction, confirm: str):
+    """Clear all chat history in the current channel"""
+    
+    # Safety check - require explicit confirmation
+    if confirm.lower() != "yes":
+        await interaction.response.send_message(
+            "⚠️ **Are you sure?** This will delete ALL messages in this channel!\n"
+            "To confirm, use: `/resploot-clear confirm:yes`",
+            ephemeral=True
+        )
+        return
+    
+    # Check if user has manage messages permission
+    if not interaction.user.guild_permissions.manage_messages:
+        await interaction.response.send_message("❌ You need 'Manage Messages' permission to use this command.", ephemeral=True)
+        return
+    
+    await interaction.response.send_message("🧹 Starting to clear all messages in this channel...", ephemeral=True)
+    
+    try:
+        channel = interaction.channel
+        
+        # Count messages first
+        message_count = 0
+        async for _ in channel.history(limit=None):
+            message_count += 1
+        
+        if message_count == 0:
+            await interaction.edit_original_response(content="✅ Channel is already empty!")
+            return
+        
+        # Confirm we're about to delete messages
+        await interaction.edit_original_response(content=f"🧹 Found {message_count} messages. Clearing channel...")
+        
+        # For efficiency, we'll delete the channel and recreate it
+        # This is much faster than deleting messages one by one
+        channel_name = channel.name
+        channel_category = channel.category
+        channel_position = channel.position
+        channel_topic = getattr(channel, 'topic', None)
+        channel_slowmode = getattr(channel, 'slowmode_delay', 0)
+        
+        # Store channel permissions
+        overwrites = channel.overwrites
+        
+        # Delete the channel
+        await channel.delete()
+        
+        # Recreate the channel with same properties
+        if isinstance(channel, discord.TextChannel):
+            new_channel = await interaction.guild.create_text_channel(
+                name=channel_name,
+                category=channel_category,
+                position=channel_position,
+                topic=channel_topic,
+                slowmode_delay=channel_slowmode,
+                overwrites=overwrites
+            )
+        else:
+            # For other channel types, just recreate as text channel
+            new_channel = await interaction.guild.create_text_channel(
+                name=channel_name,
+                category=channel_category,
+                position=channel_position,
+                overwrites=overwrites
+            )
+        
+        # Send confirmation in the new channel
+        embed = discord.Embed(
+            title="🧹 Channel Cleared!", 
+            description=f"Deleted {message_count} messages and recreated the channel.",
+            color=0x00ff00
+        )
+        embed.add_field(
+            name="Cleared by", 
+            value=interaction.user.mention, 
+            inline=True
+        )
+        embed.add_field(
+            name="Time", 
+            value=f"<t:{int(datetime.datetime.now().timestamp())}:F>", 
+            inline=True
+        )
+        
+        await new_channel.send(embed=embed)
+        
+        print(f"Channel cleared by {interaction.user}: #{channel_name} ({message_count} messages)")
+        
+    except discord.Forbidden:
+        await interaction.edit_original_response(content="❌ I don't have permission to delete/create channels in this server.")
+    except Exception as e:
+        await interaction.edit_original_response(content=f"❌ Error clearing channel: {e}")
+        print(f"Error during channel clear: {e}")
+
 @bot.tree.command(name="help", description="Show help for all commands")
 async def help_slash(interaction: discord.Interaction):
     """Show help for reset commands"""
@@ -469,6 +567,7 @@ async def help_slash(interaction: discord.Interaction):
     embed.add_field(
         name="Other Commands",
         value="`/reset_now channel_name` - Manual reset\n"
+              "`/resploot-clear confirm:yes` - Clear ALL messages in current channel\n"
               "`/ping` - Test if bot is online",
         inline=False
     )
