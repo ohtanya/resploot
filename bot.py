@@ -146,6 +146,15 @@ async def _delete_message_after_delay(message, delay_seconds):
         # Message already deleted or no permission
         pass
 
+async def _delete_interaction_after_delay(interaction, delay_seconds):
+    """Helper function to delete an interaction response after a delay"""
+    await asyncio.sleep(delay_seconds)
+    try:
+        await interaction.delete_original_response()
+    except (discord.NotFound, discord.Forbidden):
+        # Message already deleted or no permission
+        pass
+
 async def reset_channel_by_name(guild, channel_name, schedule):
     """Reset a specific channel based on its schedule configuration"""
     channel_type = schedule['type']
@@ -602,14 +611,16 @@ async def clear_channel_slash(interaction: discord.Interaction, confirm: str):
         
         if total_count == 0:
             await interaction.edit_original_response(content="✅ Channel is already empty!")
+            asyncio.create_task(_delete_interaction_after_delay(interaction, 30))
             return
         
         if messages_to_delete == 0:
             await interaction.edit_original_response(content="✅ Channel only contains pinned messages!")
+            asyncio.create_task(_delete_interaction_after_delay(interaction, 30))
             return
         
         # Confirm we're about to delete messages
-        await interaction.edit_original_response(
+        progress_message = await interaction.edit_original_response(
             content=f"🧹 Found {total_count} total messages ({pinned_count} pinned). "
                    f"Deleting {messages_to_delete} messages while preserving pins..."
         )
@@ -617,12 +628,17 @@ async def clear_channel_slash(interaction: discord.Interaction, confirm: str):
         # Use our new preservation function that keeps the channel
         await reset_channel_with_preservation(channel)
         
+        # Delete the progress message after 30 seconds
+        asyncio.create_task(_delete_interaction_after_delay(interaction, 30))
+        
         print(f"Channel cleared by {interaction.user}: #{channel.name} ({messages_to_delete} messages deleted, {pinned_count} pins preserved)")
         
     except discord.Forbidden:
         await interaction.edit_original_response(content="❌ I don't have permission to delete/create channels in this server.")
+        asyncio.create_task(_delete_interaction_after_delay(interaction, 30))
     except Exception as e:
         await interaction.edit_original_response(content=f"❌ Error clearing channel: {e}")
+        asyncio.create_task(_delete_interaction_after_delay(interaction, 30))
         print(f"Error during channel clear: {e}")
 
 @bot.tree.command(name="help", description="Show help for all commands")
