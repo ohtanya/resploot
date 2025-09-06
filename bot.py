@@ -148,21 +148,110 @@ async def reset_channel_by_name(guild, channel_name, schedule):
         if not category:
             print(f"Warning: Category '{category_name}' not found for {channel_name}")
     
-    # Find and delete the existing channel
+    # Find the existing channel
     channel = discord.utils.get(guild.channels, name=channel_name)
     if channel:
-        await channel.delete()
-        print(f"Deleted {channel_type} channel: {channel_name}")
+        await reset_channel_with_preservation(channel, category, channel_type)
+        print(f"Reset {channel_type} channel: {channel_name}")
+    else:
+        # Create new channel if it doesn't exist
+        if channel_type == 'text':
+            new_channel = await guild.create_text_channel(channel_name, category=category)
+        elif channel_type == 'voice':
+            new_channel = await guild.create_voice_channel(channel_name, category=category)
+        else:
+            raise ValueError(f"Invalid channel type: {channel_type}")
+        print(f"Created {channel_type} channel: {channel_name}")
+
+async def reset_channel_with_preservation(channel, category=None, channel_type='text'):
+    """Reset a channel while preserving pinned messages"""
+    pinned_messages = []
     
-    # Create new channel based on type
+    # Only text channels can have pinned messages
+    if hasattr(channel, 'pins') and channel_type == 'text':
+        try:
+            # Get all pinned messages
+            pins = await channel.pins()
+            for pin in pins:
+                # Store message data for recreation
+                pinned_messages.append({
+                    'content': pin.content,
+                    'author': pin.author,
+                    'embeds': pin.embeds,
+                    'attachments': [att.url for att in pin.attachments] if pin.attachments else [],
+                    'created_at': pin.created_at
+                })
+            print(f"Found {len(pinned_messages)} pinned messages to preserve")
+        except Exception as e:
+            print(f"Error retrieving pinned messages: {e}")
+    
+    # Store channel properties
+    channel_name = channel.name
+    channel_category = category or channel.category
+    channel_position = channel.position
+    channel_topic = getattr(channel, 'topic', None)
+    channel_slowmode = getattr(channel, 'slowmode_delay', 0)
+    overwrites = channel.overwrites
+    
+    # Delete the channel
+    await channel.delete()
+    
+    # Recreate the channel with same properties
     if channel_type == 'text':
-        new_channel = await guild.create_text_channel(channel_name, category=category)
+        new_channel = await channel.guild.create_text_channel(
+            name=channel_name,
+            category=channel_category,
+            position=channel_position,
+            topic=channel_topic,
+            slowmode_delay=channel_slowmode,
+            overwrites=overwrites
+        )
+        
+        # Restore pinned messages
+        if pinned_messages:
+            await new_channel.send("📌 **Restored Pinned Messages:**")
+            restored_count = 0
+            for msg_data in reversed(pinned_messages):  # Reverse to maintain chronological order
+                try:
+                    # Create embed for the preserved message
+                    embed = discord.Embed(
+                        description=msg_data['content'] or "*[No text content]*",
+                        color=0x99ccff,
+                        timestamp=msg_data['created_at']
+                    )
+                    embed.set_author(
+                        name=msg_data['author'].display_name,
+                        icon_url=msg_data['author'].display_avatar.url
+                    )
+                    embed.set_footer(text="📌 Originally pinned")
+                    
+                    # Add embeds from original message
+                    content_parts = []
+                    if msg_data['attachments']:
+                        content_parts.append(f"🔗 **Attachments:** {', '.join(msg_data['attachments'])}")
+                    
+                    content = '\n'.join(content_parts) if content_parts else None
+                    
+                    restored_msg = await new_channel.send(content=content, embed=embed)
+                    await restored_msg.pin()
+                    restored_count += 1
+                    
+                except Exception as e:
+                    print(f"Error restoring pinned message: {e}")
+            
+            if restored_count > 0:
+                print(f"Restored {restored_count} pinned messages")
+    
     elif channel_type == 'voice':
-        new_channel = await guild.create_voice_channel(channel_name, category=category)
+        new_channel = await channel.guild.create_voice_channel(
+            name=channel_name,
+            category=channel_category,
+            position=channel_position,
+            overwrites=overwrites
+        )
     else:
         raise ValueError(f"Invalid channel type: {channel_type}")
     
-    print(f"Created {channel_type} channel: {channel_name}")
     return new_channel
 
 # SLASH COMMANDS
@@ -449,7 +538,7 @@ async def next_reset_slash(interaction: discord.Interaction, channel_name: str =
         
         await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="resploot-clear", description="Clear all messages in the current channel")
+@bot.tree.command(name="resploot-clear", description="Clear all messages in current channel (preserves pinned messages)")
 @app_commands.describe(
     confirm="Type 'yes' to confirm deletion of all messages in this channel"
 )
@@ -485,61 +574,34 @@ async def clear_channel_slash(interaction: discord.Interaction, confirm: str):
             return
         
         # Confirm we're about to delete messages
-        await interaction.edit_original_response(content=f"🧹 Found {message_count} messages. Clearing channel...")
+        await interaction.edit_original_response(content=f"🧹 Found {message_count} messages. Clearing channel and preserving pinned messages...")
         
-        # For efficiency, we'll delete the channel and recreate it
-        # This is much faster than deleting messages one by one
-        channel_name = channel.name
-        channel_category = channel.category
-        channel_position = channel.position
-        channel_topic = getattr(channel, 'topic', None)
-        channel_slowmode = getattr(channel, 'slowmode_delay', 0)
+        # Use our new preservation function
+        await reset_channel_with_preservation(channel)
         
-        # Store channel permissions
-        overwrites = channel.overwrites
-        
-        # Delete the channel
-        await channel.delete()
-        
-        # Recreate the channel with same properties
-        if isinstance(channel, discord.TextChannel):
-            new_channel = await interaction.guild.create_text_channel(
-                name=channel_name,
-                category=channel_category,
-                position=channel_position,
-                topic=channel_topic,
-                slowmode_delay=channel_slowmode,
-                overwrites=overwrites
+        # The function recreates the channel, so we need to find the new one
+        new_channel = discord.utils.get(interaction.guild.channels, name=channel.name)
+        if new_channel:
+            # Send confirmation in the new channel
+            embed = discord.Embed(
+                title="🧹 Channel Cleared!", 
+                description=f"Deleted {message_count} messages and recreated the channel.\n📌 Pinned messages have been preserved.",
+                color=0x00ff00
             )
-        else:
-            # For other channel types, just recreate as text channel
-            new_channel = await interaction.guild.create_text_channel(
-                name=channel_name,
-                category=channel_category,
-                position=channel_position,
-                overwrites=overwrites
+            embed.add_field(
+                name="Cleared by", 
+                value=interaction.user.mention, 
+                inline=True
             )
+            embed.add_field(
+                name="Time", 
+                value=f"<t:{int(datetime.datetime.now().timestamp())}:F>", 
+                inline=True
+            )
+            
+            await new_channel.send(embed=embed)
         
-        # Send confirmation in the new channel
-        embed = discord.Embed(
-            title="🧹 Channel Cleared!", 
-            description=f"Deleted {message_count} messages and recreated the channel.",
-            color=0x00ff00
-        )
-        embed.add_field(
-            name="Cleared by", 
-            value=interaction.user.mention, 
-            inline=True
-        )
-        embed.add_field(
-            name="Time", 
-            value=f"<t:{int(datetime.datetime.now().timestamp())}:F>", 
-            inline=True
-        )
-        
-        await new_channel.send(embed=embed)
-        
-        print(f"Channel cleared by {interaction.user}: #{channel_name} ({message_count} messages)")
+        print(f"Channel cleared by {interaction.user}: #{channel.name} ({message_count} messages)")
         
     except discord.Forbidden:
         await interaction.edit_original_response(content="❌ I don't have permission to delete/create channels in this server.")
@@ -571,15 +633,16 @@ async def help_slash(interaction: discord.Interaction):
     embed.add_field(
         name="Other Commands",
         value="`/reset_now channel_name` - Manual reset\n"
-              "`/resploot-clear confirm:yes` - Clear ALL messages in current channel\n"
+              "`/resploot-clear confirm:yes` - Clear ALL messages (preserves pinned)\n"
               "`/ping` - Test if bot is online",
         inline=False
     )
     
     embed.add_field(
-        name="✨ New Features",
+        name="✨ Features",
         value="• **Multiple resets per day** per channel\n"
               "• **Smart schedule management** - remove specific schedules by number\n"
+              "• **Pinned message preservation** - important messages are saved during resets\n"
               "• **Enhanced displays** - see all times at once\n"
               "• **Automatic migration** - old single schedules still work",
         inline=False
