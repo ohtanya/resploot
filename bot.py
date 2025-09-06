@@ -5,6 +5,7 @@ from discord import app_commands
 import datetime
 import pytz
 import json
+import asyncio
 from dotenv import load_dotenv
 
 # Load environment variables from .env
@@ -165,27 +166,74 @@ async def reset_channel_by_name(guild, channel_name, schedule):
 
 async def reset_channel_with_preservation(channel, category=None, channel_type='text'):
     """Reset a channel while preserving pinned messages"""
-    pinned_messages = []
     
-    # Only text channels can have pinned messages
-    if hasattr(channel, 'pins') and channel_type == 'text':
-        try:
-            # Get all pinned messages
-            pins = await channel.pins()
-            for pin in pins:
-                # Store message data for recreation
-                pinned_messages.append({
-                    'content': pin.content,
-                    'author': pin.author,
-                    'embeds': pin.embeds,
-                    'attachments': [att.url for att in pin.attachments] if pin.attachments else [],
-                    'created_at': pin.created_at
-                })
-            print(f"Found {len(pinned_messages)} pinned messages to preserve")
-        except Exception as e:
-            print(f"Error retrieving pinned messages: {e}")
+    # Only text channels can have messages to delete
+    if channel_type != 'text' or not hasattr(channel, 'history'):
+        # For voice channels, still use the old method (delete/recreate)
+        channel_name = channel.name
+        channel_category = category or channel.category
+        channel_position = channel.position
+        overwrites = channel.overwrites
+        
+        await channel.delete()
+        
+        new_channel = await channel.guild.create_voice_channel(
+            name=channel_name,
+            category=channel_category,
+            position=channel_position,
+            overwrites=overwrites
+        )
+        return new_channel
     
-    # Store channel properties
+    # For text channels, delete messages but keep pins
+    deleted_count = 0
+    pinned_messages = set()
+    
+    try:
+        # Get all pinned messages first
+        pins = await channel.pins()
+        pinned_messages = {pin.id for pin in pins}
+        print(f"Found {len(pinned_messages)} pinned messages to preserve")
+        
+        # Delete messages in batches, skipping pinned ones
+        async for message in channel.history(limit=None, oldest_first=False):
+            if message.id not in pinned_messages:
+                try:
+                    await message.delete()
+                    deleted_count += 1
+                    
+                    # Add small delay to avoid rate limits
+                    if deleted_count % 10 == 0:
+                        await asyncio.sleep(0.1)
+                        
+                except discord.NotFound:
+                    # Message already deleted, continue
+                    pass
+                except discord.Forbidden:
+                    print(f"No permission to delete message {message.id}")
+                except Exception as e:
+                    print(f"Error deleting message {message.id}: {e}")
+        
+        print(f"Deleted {deleted_count} messages, preserved {len(pinned_messages)} pinned messages")
+        
+        # Send a reset notification
+        embed = discord.Embed(
+            title="🔄 Channel Reset Complete",
+            description=f"Deleted {deleted_count} messages\n� Preserved {len(pinned_messages)} pinned messages",
+            color=0x00ff00,
+            timestamp=datetime.datetime.now()
+        )
+        await channel.send(embed=embed)
+        
+    except Exception as e:
+        print(f"Error during message deletion: {e}")
+        # Fall back to recreating the channel if message deletion fails
+        return await reset_channel_by_recreation(channel, category, channel_type)
+    
+    return channel
+
+async def reset_channel_by_recreation(channel, category=None, channel_type='text'):
+    """Fallback method: Reset channel by deleting and recreating it"""
     channel_name = channel.name
     channel_category = category or channel.category
     channel_position = channel.position
@@ -206,42 +254,6 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
             slowmode_delay=channel_slowmode,
             overwrites=overwrites
         )
-        
-        # Restore pinned messages
-        if pinned_messages:
-            await new_channel.send("📌 **Restored Pinned Messages:**")
-            restored_count = 0
-            for msg_data in reversed(pinned_messages):  # Reverse to maintain chronological order
-                try:
-                    # Create embed for the preserved message
-                    embed = discord.Embed(
-                        description=msg_data['content'] or "*[No text content]*",
-                        color=0x99ccff,
-                        timestamp=msg_data['created_at']
-                    )
-                    embed.set_author(
-                        name=msg_data['author'].display_name,
-                        icon_url=msg_data['author'].display_avatar.url
-                    )
-                    embed.set_footer(text="📌 Originally pinned")
-                    
-                    # Add embeds from original message
-                    content_parts = []
-                    if msg_data['attachments']:
-                        content_parts.append(f"🔗 **Attachments:** {', '.join(msg_data['attachments'])}")
-                    
-                    content = '\n'.join(content_parts) if content_parts else None
-                    
-                    restored_msg = await new_channel.send(content=content, embed=embed)
-                    await restored_msg.pin()
-                    restored_count += 1
-                    
-                except Exception as e:
-                    print(f"Error restoring pinned message: {e}")
-            
-            if restored_count > 0:
-                print(f"Restored {restored_count} pinned messages")
-    
     elif channel_type == 'voice':
         new_channel = await channel.guild.create_voice_channel(
             name=channel_name,
@@ -538,9 +550,9 @@ async def next_reset_slash(interaction: discord.Interaction, channel_name: str =
         
         await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="resploot-clear", description="Clear all messages in current channel (preserves pinned messages)")
+@bot.tree.command(name="resploot-clear", description="Delete all messages except pinned ones in current channel")
 @app_commands.describe(
-    confirm="Type 'yes' to confirm deletion of all messages in this channel"
+    confirm="Type 'yes' to confirm deletion of all non-pinned messages"
 )
 async def clear_channel_slash(interaction: discord.Interaction, confirm: str):
     """Clear all chat history in the current channel"""
@@ -548,7 +560,8 @@ async def clear_channel_slash(interaction: discord.Interaction, confirm: str):
     # Safety check - require explicit confirmation
     if confirm.lower() != "yes":
         await interaction.response.send_message(
-            "⚠️ **Are you sure?** This will delete ALL messages in this channel!\n"
+            "⚠️ **Are you sure?** This will delete ALL non-pinned messages in this channel!\n"
+            "📌 Pinned messages will be preserved.\n"
             "To confirm, use: `/resploot-clear confirm:yes`",
             ephemeral=True
         )
@@ -564,44 +577,35 @@ async def clear_channel_slash(interaction: discord.Interaction, confirm: str):
     try:
         channel = interaction.channel
         
-        # Count messages first
-        message_count = 0
-        async for _ in channel.history(limit=None):
-            message_count += 1
+        # Count total messages first
+        total_count = 0
+        pinned_count = 0
+        async for message in channel.history(limit=None):
+            total_count += 1
         
-        if message_count == 0:
+        # Count pinned messages
+        pins = await channel.pins()
+        pinned_count = len(pins)
+        messages_to_delete = total_count - pinned_count
+        
+        if total_count == 0:
             await interaction.edit_original_response(content="✅ Channel is already empty!")
             return
         
-        # Confirm we're about to delete messages
-        await interaction.edit_original_response(content=f"🧹 Found {message_count} messages. Clearing channel and preserving pinned messages...")
+        if messages_to_delete == 0:
+            await interaction.edit_original_response(content="✅ Channel only contains pinned messages!")
+            return
         
-        # Use our new preservation function
+        # Confirm we're about to delete messages
+        await interaction.edit_original_response(
+            content=f"🧹 Found {total_count} total messages ({pinned_count} pinned). "
+                   f"Deleting {messages_to_delete} messages while preserving pins..."
+        )
+        
+        # Use our new preservation function that keeps the channel
         await reset_channel_with_preservation(channel)
         
-        # The function recreates the channel, so we need to find the new one
-        new_channel = discord.utils.get(interaction.guild.channels, name=channel.name)
-        if new_channel:
-            # Send confirmation in the new channel
-            embed = discord.Embed(
-                title="🧹 Channel Cleared!", 
-                description=f"Deleted {message_count} messages and recreated the channel.\n📌 Pinned messages have been preserved.",
-                color=0x00ff00
-            )
-            embed.add_field(
-                name="Cleared by", 
-                value=interaction.user.mention, 
-                inline=True
-            )
-            embed.add_field(
-                name="Time", 
-                value=f"<t:{int(datetime.datetime.now().timestamp())}:F>", 
-                inline=True
-            )
-            
-            await new_channel.send(embed=embed)
-        
-        print(f"Channel cleared by {interaction.user}: #{channel.name} ({message_count} messages)")
+        print(f"Channel cleared by {interaction.user}: #{channel.name} ({messages_to_delete} messages deleted, {pinned_count} pins preserved)")
         
     except discord.Forbidden:
         await interaction.edit_original_response(content="❌ I don't have permission to delete/create channels in this server.")
