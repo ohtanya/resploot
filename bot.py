@@ -137,6 +137,15 @@ async def reset_scheduler():
                     except Exception as e:
                         print(f"Error during scheduled reset of {channel_name} in {guild.name}: {e}")
 
+async def _delete_message_after_delay(message, delay_seconds):
+    """Helper function to delete a message after a delay"""
+    await asyncio.sleep(delay_seconds)
+    try:
+        await message.delete()
+    except (discord.NotFound, discord.Forbidden):
+        # Message already deleted or no permission
+        pass
+
 async def reset_channel_by_name(guild, channel_name, schedule):
     """Reset a specific channel based on its schedule configuration"""
     channel_type = schedule['type']
@@ -223,7 +232,10 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
             color=0x00ff00,
             timestamp=datetime.datetime.now()
         )
-        await channel.send(embed=embed)
+        reset_message = await channel.send(embed=embed)
+        
+        # Delete the reset notification after 30 seconds
+        asyncio.create_task(_delete_message_after_delay(reset_message, 30))
         
     except Exception as e:
         print(f"Error during message deletion: {e}")
