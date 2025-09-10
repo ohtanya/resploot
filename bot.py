@@ -243,8 +243,40 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
                 # Archive each pin
                 for pin in reversed(pins):
                     try:
+                        # Build comprehensive content description
+                        content_parts = []
+                        
+                        # Add text content if it exists
+                        if pin.content:
+                            content_parts.append(pin.content)
+                        
+                        # Add embed information
+                        if pin.embeds:
+                            for embed_data in pin.embeds:
+                                if embed_data.title:
+                                    content_parts.append(f"**{embed_data.title}**")
+                                if embed_data.description:
+                                    content_parts.append(embed_data.description)
+                                if embed_data.url:
+                                    content_parts.append(f"🔗 {embed_data.url}")
+                                # Add embed fields
+                                for field in embed_data.fields:
+                                    content_parts.append(f"**{field.name}**: {field.value}")
+                        
+                        # Combine all content, or show message type if no content
+                        if content_parts:
+                            description = "\n\n".join(content_parts)
+                        else:
+                            # For messages with no text/embeds, show what type it is
+                            msg_type = "System message" if pin.type != discord.MessageType.default else "Message"
+                            description = f"*[{msg_type} - see attachments or original for full content]*"
+                        
+                        # Limit description length (Discord embed limit is 4096 chars)
+                        if len(description) > 4000:
+                            description = description[:4000] + "... *(truncated)*"
+                        
                         embed = discord.Embed(
-                            description=pin.content or "*[No text content]*",
+                            description=description,
                             color=0xffdd44,
                             timestamp=pin.created_at
                         )
@@ -254,9 +286,22 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
                         )
                         embed.set_footer(text=f"Originally posted • ID: {pin.id}")
                         
+                        # Handle attachments
                         if pin.attachments:
-                            attachment_links = [f"📎 [{att.filename}]({att.url})" for att in pin.attachments]
+                            attachment_links = []
+                            for att in pin.attachments:
+                                attachment_links.append(f"📎 [{att.filename}]({att.url})")
                             embed.add_field(name="Attachments", value="\n".join(attachment_links), inline=False)
+                        
+                        # Add embed images if present
+                        if pin.embeds:
+                            for embed_data in pin.embeds:
+                                if embed_data.image:
+                                    embed.set_image(url=embed_data.image.url)
+                                    break  # Only set one image
+                                elif embed_data.thumbnail:
+                                    embed.set_thumbnail(url=embed_data.thumbnail.url)
+                                    break
                         
                         await archive_channel.send(embed=embed)
                         archived_count += 1
