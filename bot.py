@@ -108,9 +108,15 @@ async def reset_scheduler():
     now = datetime.datetime.now(tz)
     current_date = now.strftime('%Y-%m-%d')
     
-    # Log current time every hour for debugging
-    if now.minute == 0:
-        print(f"Current time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    # Log current time every 10 minutes for debugging
+    if now.minute % 10 == 0:
+        print(f"[SCHEDULER] Current time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')} | Checking {len(scheduled_resets)} channel schedules")
+    
+    # Check if we have any schedules at all
+    if not scheduled_resets:
+        if now.minute == 0:  # Log once per hour
+            print(f"[SCHEDULER] No schedules configured. Use /schedule_reset to add some!")
+        return
     
     # Check all guilds the bot is in
     for guild in bot.guilds:
@@ -119,11 +125,17 @@ async def reset_scheduler():
             for schedule_index, schedule in enumerate(schedules):
                 # Check if it's time to reset and we haven't reset at this specific time today
                 schedule_key = f"{current_date}-{schedule['hour']:02d}:{schedule['minute']:02d}"
+                
+                # Debug: Log when we're close to a scheduled time
+                time_until = (schedule['hour'] * 60 + schedule['minute']) - (now.hour * 60 + now.minute)
+                if time_until <= 2 and time_until >= 0:  # Within 2 minutes
+                    print(f"[SCHEDULER] Approaching reset time for {channel_name} in {time_until} minutes")
+                
                 if (now.hour == schedule['hour'] and 
                     now.minute == schedule['minute'] and 
                     schedule.get('last_reset') != schedule_key):
                     
-                    print(f"Starting scheduled reset for {channel_name} (schedule {schedule_index+1}) in {guild.name} at {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                    print(f"[SCHEDULER] ⏰ TRIGGERING scheduled reset for {channel_name} (schedule {schedule_index+1}) in {guild.name} at {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
                     
                     try:
                         await reset_channel_by_name(guild, channel_name, schedule)
@@ -132,10 +144,12 @@ async def reset_scheduler():
                         schedule['last_reset'] = schedule_key
                         save_schedules()
                         
-                        print(f"Reset completed for {channel_name} in {guild.name}")
+                        print(f"[SCHEDULER] ✅ Reset completed for {channel_name} in {guild.name}")
                         
                     except Exception as e:
-                        print(f"Error during scheduled reset of {channel_name} in {guild.name}: {e}")
+                        print(f"[SCHEDULER] ❌ Error during scheduled reset of {channel_name} in {guild.name}: {e}")
+                        import traceback
+                        traceback.print_exc()
 
 async def _delete_message_after_delay(message, delay_seconds):
     """Helper function to delete a message after a delay"""
@@ -382,7 +396,7 @@ async def ping_slash(interaction: discord.Interaction):
 @app_commands.describe(
     channel_name="Name of the channel to reset (without #)",
     channel_type="Type of channel",
-    time="Time in HH:MM format (e.g., 10:42, 04:30)", 
+    time="Time in HH:MM format - 24hr (14:30) or 12hr with AM/PM (2:30 PM)", 
     category="Category to place the channel in (optional)"
 )
 @app_commands.choices(channel_type=[
@@ -391,17 +405,42 @@ async def ping_slash(interaction: discord.Interaction):
 ])
 async def schedule_reset_slash(interaction: discord.Interaction, channel_name: str, channel_type: str, time: str, category: str = None):
     """Schedule a daily reset for a channel"""
-    # Parse time in HH:MM format
+    # Parse time in HH:MM format (supports both 12hr and 24hr)
     try:
-        if ':' in time:
-            hour_str, minute_str = time.split(':')
-            hour = int(hour_str)
-            minute = int(minute_str)
+        time = time.strip().upper()  # Normalize input
+        
+        # Check for AM/PM format
+        if 'AM' in time or 'PM' in time:
+            # 12-hour format
+            is_pm = 'PM' in time
+            time_part = time.replace('AM', '').replace('PM', '').strip()
+            
+            if ':' in time_part:
+                hour_str, minute_str = time_part.split(':')
+                hour = int(hour_str)
+                minute = int(minute_str)
+            else:
+                hour = int(time_part)
+                minute = 0
+            
+            # Convert to 24-hour format
+            if is_pm and hour != 12:
+                hour += 12
+            elif not is_pm and hour == 12:
+                hour = 0
+                
         else:
-            hour = int(time)
-            minute = 0
+            # 24-hour format
+            if ':' in time:
+                hour_str, minute_str = time.split(':')
+                hour = int(hour_str)
+                minute = int(minute_str)
+            else:
+                hour = int(time)
+                minute = 0
+                
     except ValueError:
-        await interaction.response.send_message("❌ Invalid time format. Use HH:MM (e.g., 10:42 or 04:30)", ephemeral=True)
+        await interaction.response.send_message("❌ Invalid time format. Use:\n• 24-hour: `14:30` or `2:30`\n• 12-hour: `2:30 PM` or `10:00 AM`", ephemeral=True)
         return
     
     # Validate inputs
@@ -732,7 +771,7 @@ async def help_slash(interaction: discord.Interaction):
     
     embed.add_field(
         name="/schedule_reset",
-        value="Schedule a daily reset for a channel\n**Example:** `/schedule_reset daily-chat text 10:42`\n**Multiple times:** Add as many schedules as you want per channel!\n**With category:** Add category name in the category field",
+        value="Schedule a daily reset for a channel\n**Examples:** \n• `/schedule_reset daily-chat text 10:42 AM`\n• `/schedule_reset daily-chat text 22:30` (24hr)\n• `/schedule_reset daily-chat text 2:30 PM`\n**Multiple times:** Add as many schedules as you want per channel!\n**With category:** Add category name in the category field",
         inline=False
     )
     
