@@ -72,6 +72,12 @@ async def on_ready():
     print(f"Bot is online as {bot.user}")
     print(f"Current server time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     
+    # Show timezone info for debugging
+    server_time = datetime.datetime.now()
+    print(f"VPS local time: {server_time.strftime('%Y-%m-%d %H:%M:%S')} (no timezone)")
+    print(f"Bot timezone: {TIMEZONE}")
+    print(f"Bot time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    
     # Load scheduled resets
     load_schedules()
     
@@ -110,7 +116,8 @@ async def reset_scheduler():
     
     # Log current time every 10 minutes for debugging
     if now.minute % 10 == 0:
-        print(f"[SCHEDULER] Current time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')} | Checking {len(scheduled_resets)} channel schedules")
+        server_local = datetime.datetime.now()
+        print(f"[SCHEDULER] Bot time ({TIMEZONE}): {now.strftime('%Y-%m-%d %H:%M:%S %Z')} | VPS local: {server_local.strftime('%H:%M:%S')} | Checking {len(scheduled_resets)} channel schedules")
     
     # Check if we have any schedules at all
     if not scheduled_resets:
