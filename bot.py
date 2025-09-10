@@ -215,101 +215,54 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
         archive_name = f"{channel_name}-pins"
         
         try:
-            # Get pinned messages
+            # Get pinned messages and extract ALL content BEFORE deleting channel
             pins = await channel.pins()
             pinned_count = len(pins)
             archived_count = 0
+            extracted_pins = []
             
             if pinned_count > 0:
-                # Find or create archive channel
-                archive_channel = discord.utils.get(guild.text_channels, name=archive_name)
-                if not archive_channel:
-                    archive_category = category or channel.category
-                    archive_channel = await guild.create_text_channel(
-                        archive_name, 
-                        category=archive_category,
-                        topic=f"📌 Archived pins from #{channel_name}"
-                    )
-                    print(f"Created archive channel: {archive_name}")
-                
-                # Add separator and archive pins
-                separator_embed = discord.Embed(
-                    title=f"📌 Pins from #{channel_name}",
-                    description=f"Reset: <t:{int(datetime.datetime.now().timestamp())}:F>",
-                    color=0x99ccff
-                )
-                await archive_channel.send(embed=separator_embed)
-                
-                # Archive each pin
+                # Extract all pin data first (before channel deletion!)
                 for pin in reversed(pins):
                     try:
-                        # Build comprehensive content description
-                        content_parts = []
+                        # Extract comprehensive message data
+                        pin_data = {
+                            'content': pin.content,
+                            'author_name': pin.author.display_name,
+                            'author_avatar': pin.author.display_avatar.url,
+                            'created_at': pin.created_at,
+                            'message_id': pin.id,
+                            'embeds': [],
+                            'attachments': [],
+                            'message_type': pin.type
+                        }
                         
-                        # Add text content if it exists
-                        if pin.content:
-                            content_parts.append(pin.content)
+                        # Extract embed data
+                        for embed in pin.embeds:
+                            embed_data = {
+                                'title': embed.title,
+                                'description': embed.description,
+                                'url': embed.url,
+                                'image_url': embed.image.url if embed.image else None,
+                                'thumbnail_url': embed.thumbnail.url if embed.thumbnail else None,
+                                'fields': [{'name': field.name, 'value': field.value} for field in embed.fields]
+                            }
+                            pin_data['embeds'].append(embed_data)
                         
-                        # Add embed information
-                        if pin.embeds:
-                            for embed_data in pin.embeds:
-                                if embed_data.title:
-                                    content_parts.append(f"**{embed_data.title}**")
-                                if embed_data.description:
-                                    content_parts.append(embed_data.description)
-                                if embed_data.url:
-                                    content_parts.append(f"🔗 {embed_data.url}")
-                                # Add embed fields
-                                for field in embed_data.fields:
-                                    content_parts.append(f"**{field.name}**: {field.value}")
+                        # Extract attachment data
+                        for att in pin.attachments:
+                            pin_data['attachments'].append({
+                                'filename': att.filename,
+                                'url': att.url,
+                                'size': att.size
+                            })
                         
-                        # Combine all content, or show message type if no content
-                        if content_parts:
-                            description = "\n\n".join(content_parts)
-                        else:
-                            # For messages with no text/embeds, show what type it is
-                            msg_type = "System message" if pin.type != discord.MessageType.default else "Message"
-                            description = f"*[{msg_type} - see attachments or original for full content]*"
-                        
-                        # Limit description length (Discord embed limit is 4096 chars)
-                        if len(description) > 4000:
-                            description = description[:4000] + "... *(truncated)*"
-                        
-                        embed = discord.Embed(
-                            description=description,
-                            color=0xffdd44,
-                            timestamp=pin.created_at
-                        )
-                        embed.set_author(
-                            name=pin.author.display_name,
-                            icon_url=pin.author.display_avatar.url
-                        )
-                        embed.set_footer(text=f"Originally posted • ID: {pin.id}")
-                        
-                        # Handle attachments
-                        if pin.attachments:
-                            attachment_links = []
-                            for att in pin.attachments:
-                                attachment_links.append(f"📎 [{att.filename}]({att.url})")
-                            embed.add_field(name="Attachments", value="\n".join(attachment_links), inline=False)
-                        
-                        # Add embed images if present
-                        if pin.embeds:
-                            for embed_data in pin.embeds:
-                                if embed_data.image:
-                                    embed.set_image(url=embed_data.image.url)
-                                    break  # Only set one image
-                                elif embed_data.thumbnail:
-                                    embed.set_thumbnail(url=embed_data.thumbnail.url)
-                                    break
-                        
-                        await archive_channel.send(embed=embed)
-                        archived_count += 1
+                        extracted_pins.append(pin_data)
                         
                     except Exception as e:
-                        print(f"Error archiving pin {pin.id}: {e}")
+                        print(f"Error extracting pin data for message {pin.id}: {e}")
                 
-                print(f"Archived {archived_count} pins to #{archive_name}")
+                print(f"Extracted {len(extracted_pins)} pins before channel deletion")
             
             # Store channel properties
             channel_category = category or channel.category
@@ -328,6 +281,95 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
                 slowmode_delay=channel_slowmode,
                 overwrites=overwrites
             )
+            
+            # Now create archive channel and restore pins from extracted data
+            if extracted_pins:
+                # Find or create archive channel
+                archive_channel = discord.utils.get(guild.text_channels, name=archive_name)
+                if not archive_channel:
+                    archive_channel = await guild.create_text_channel(
+                        archive_name, 
+                        category=channel_category,
+                        topic=f"📌 Archived pins from #{channel_name}"
+                    )
+                    print(f"Created archive channel: {archive_name}")
+                
+                # Add separator
+                separator_embed = discord.Embed(
+                    title=f"📌 Pins from #{channel_name}",
+                    description=f"Reset: <t:{int(datetime.datetime.now().timestamp())}:F>",
+                    color=0x99ccff
+                )
+                await archive_channel.send(embed=separator_embed)
+                
+                # Recreate each pin from extracted data
+                for pin_data in extracted_pins:
+                    try:
+                        # Build comprehensive content description from extracted data
+                        content_parts = []
+                        
+                        # Add text content if it exists
+                        if pin_data['content']:
+                            content_parts.append(pin_data['content'])
+                        
+                        # Add embed information
+                        for embed_data in pin_data['embeds']:
+                            if embed_data['title']:
+                                content_parts.append(f"**{embed_data['title']}**")
+                            if embed_data['description']:
+                                content_parts.append(embed_data['description'])
+                            if embed_data['url']:
+                                content_parts.append(f"🔗 {embed_data['url']}")
+                            # Add embed fields
+                            for field in embed_data['fields']:
+                                content_parts.append(f"**{field['name']}**: {field['value']}")
+                        
+                        # Combine all content
+                        if content_parts:
+                            description = "\n\n".join(content_parts)
+                        else:
+                            # For messages with no text/embeds, show what type it is
+                            msg_type = "System message" if pin_data['message_type'] != discord.MessageType.default else "Message"
+                            description = f"*[{msg_type} - see attachments or original for full content]*"
+                        
+                        # Limit description length (Discord embed limit is 4096 chars)
+                        if len(description) > 4000:
+                            description = description[:4000] + "... *(truncated)*"
+                        
+                        embed = discord.Embed(
+                            description=description,
+                            color=0xffdd44,
+                            timestamp=pin_data['created_at']
+                        )
+                        embed.set_author(
+                            name=pin_data['author_name'],
+                            icon_url=pin_data['author_avatar']
+                        )
+                        embed.set_footer(text=f"Originally posted • ID: {pin_data['message_id']}")
+                        
+                        # Handle attachments
+                        if pin_data['attachments']:
+                            attachment_links = []
+                            for att in pin_data['attachments']:
+                                attachment_links.append(f"📎 [{att['filename']}]({att['url']})")
+                            embed.add_field(name="Attachments", value="\n".join(attachment_links), inline=False)
+                        
+                        # Add embed images if present
+                        for embed_data in pin_data['embeds']:
+                            if embed_data['image_url']:
+                                embed.set_image(url=embed_data['image_url'])
+                                break  # Only set one image
+                            elif embed_data['thumbnail_url']:
+                                embed.set_thumbnail(url=embed_data['thumbnail_url'])
+                                break
+                        
+                        await archive_channel.send(embed=embed)
+                        archived_count += 1
+                        
+                    except Exception as e:
+                        print(f"Error creating archived message: {e}")
+                
+                print(f"Archived {archived_count} pins to #{archive_name}")
             
             # Send completion message
             if pinned_count > 0:
