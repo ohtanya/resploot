@@ -185,6 +185,10 @@ async def reset_channel_by_name(guild, channel_name, schedule):
 async def reset_channel_with_preservation(channel, category=None, channel_type='text'):
     """Reset a channel while preserving pinned messages"""
     
+    # FOR FAST RESETS: Use archive method (move pins to separate channel, then recreate)
+    # Set to False to use slow method (delete messages one by one)
+    USE_FAST_ARCHIVE_METHOD = True
+    
     # Only text channels can have messages to delete
     if channel_type != 'text' or not hasattr(channel, 'history'):
         # For voice channels, still use the old method (delete/recreate)
@@ -203,6 +207,111 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
         )
         return new_channel
     
+    # For text channels, choose fast or slow method
+    if USE_FAST_ARCHIVE_METHOD:
+        # FAST METHOD: Archive pins to separate channel, then recreate main channel
+        guild = channel.guild
+        channel_name = channel.name
+        archive_name = f"{channel_name}-pins"
+        
+        try:
+            # Get pinned messages
+            pins = await channel.pins()
+            pinned_count = len(pins)
+            archived_count = 0
+            
+            if pinned_count > 0:
+                # Find or create archive channel
+                archive_channel = discord.utils.get(guild.text_channels, name=archive_name)
+                if not archive_channel:
+                    archive_category = category or channel.category
+                    archive_channel = await guild.create_text_channel(
+                        archive_name, 
+                        category=archive_category,
+                        topic=f"📌 Archived pins from #{channel_name}"
+                    )
+                    print(f"Created archive channel: {archive_name}")
+                
+                # Add separator and archive pins
+                separator_embed = discord.Embed(
+                    title=f"📌 Pins from #{channel_name}",
+                    description=f"Reset: <t:{int(datetime.datetime.now().timestamp())}:F>",
+                    color=0x99ccff
+                )
+                await archive_channel.send(embed=separator_embed)
+                
+                # Archive each pin
+                for pin in reversed(pins):
+                    try:
+                        embed = discord.Embed(
+                            description=pin.content or "*[No text content]*",
+                            color=0xffdd44,
+                            timestamp=pin.created_at
+                        )
+                        embed.set_author(
+                            name=pin.author.display_name,
+                            icon_url=pin.author.display_avatar.url
+                        )
+                        embed.set_footer(text=f"Originally posted • ID: {pin.id}")
+                        
+                        if pin.attachments:
+                            attachment_links = [f"📎 [{att.filename}]({att.url})" for att in pin.attachments]
+                            embed.add_field(name="Attachments", value="\n".join(attachment_links), inline=False)
+                        
+                        await archive_channel.send(embed=embed)
+                        archived_count += 1
+                        
+                    except Exception as e:
+                        print(f"Error archiving pin {pin.id}: {e}")
+                
+                print(f"Archived {archived_count} pins to #{archive_name}")
+            
+            # Store channel properties
+            channel_category = category or channel.category
+            channel_position = channel.position
+            channel_topic = getattr(channel, 'topic', None)
+            channel_slowmode = getattr(channel, 'slowmode_delay', 0)
+            overwrites = channel.overwrites
+            
+            # Delete and recreate channel (FAST!)
+            await channel.delete()
+            new_channel = await guild.create_text_channel(
+                name=channel_name,
+                category=channel_category,
+                position=channel_position,
+                topic=channel_topic,
+                slowmode_delay=channel_slowmode,
+                overwrites=overwrites
+            )
+            
+            # Send completion message
+            if pinned_count > 0:
+                embed = discord.Embed(
+                    title="🔄 Channel Reset Complete",
+                    description=f"Channel recreated • {archived_count} pins → #{archive_name}",
+                    color=0x00ff00,
+                    timestamp=datetime.datetime.now()
+                )
+            else:
+                embed = discord.Embed(
+                    title="🔄 Channel Reset Complete",
+                    description="Channel recreated",
+                    color=0x00ff00,
+                    timestamp=datetime.datetime.now()
+                )
+            
+            reset_message = await new_channel.send(embed=embed)
+            asyncio.create_task(_delete_message_after_delay(reset_message, 30))
+            
+            print(f"Fast reset completed for {channel_name}")
+            return new_channel
+            
+        except Exception as e:
+            print(f"Error during fast reset: {e}")
+            # Fall back to slow method if fast method fails
+            pass
+    
+    # SLOW METHOD: Delete messages but keep pins (original method)
     # For text channels, delete messages but keep pins
     deleted_count = 0
     pinned_messages = set()
