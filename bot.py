@@ -234,8 +234,19 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
                             'message_id': pin.id,
                             'embeds': [],
                             'attachments': [],
-                            'message_type': pin.type
+                            'message_type': pin.type,
+                            'system_content': pin.system_content,  # For system messages
+                            'clean_content': pin.clean_content     # Processed content without mentions
                         }
+                        
+                        # Debug: Print what we're extracting
+                        print(f"Extracting pin {pin.id}:")
+                        print(f"  - Content: {repr(pin.content)}")
+                        print(f"  - Clean content: {repr(pin.clean_content)}")
+                        print(f"  - System content: {repr(pin.system_content)}")
+                        print(f"  - Embeds: {len(pin.embeds)}")
+                        print(f"  - Attachments: {len(pin.attachments)}")
+                        print(f"  - Message type: {pin.type}")
                         
                         # Extract embed data
                         for embed in pin.embeds:
@@ -245,7 +256,9 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
                                 'url': embed.url,
                                 'image_url': embed.image.url if embed.image else None,
                                 'thumbnail_url': embed.thumbnail.url if embed.thumbnail else None,
-                                'fields': [{'name': field.name, 'value': field.value} for field in embed.fields]
+                                'fields': [{'name': field.name, 'value': field.value} for field in embed.fields],
+                                'footer': embed.footer.text if embed.footer else None,
+                                'author': embed.author.name if embed.author else None
                             }
                             pin_data['embeds'].append(embed_data)
                         
@@ -254,7 +267,8 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
                             pin_data['attachments'].append({
                                 'filename': att.filename,
                                 'url': att.url,
-                                'size': att.size
+                                'size': att.size,
+                                'content_type': getattr(att, 'content_type', 'unknown')
                             })
                         
                         extracted_pins.append(pin_data)
@@ -308,29 +322,65 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
                         # Build comprehensive content description from extracted data
                         content_parts = []
                         
-                        # Add text content if it exists
+                        # Add text content if it exists (try multiple sources)
                         if pin_data['content']:
-                            content_parts.append(pin_data['content'])
+                            content_parts.append(f"💬 {pin_data['content']}")
+                        elif pin_data['clean_content']:
+                            content_parts.append(f"💬 {pin_data['clean_content']}")
+                        elif pin_data['system_content']:
+                            content_parts.append(f"🔔 {pin_data['system_content']}")
                         
                         # Add embed information
                         for embed_data in pin_data['embeds']:
+                            embed_parts = []
                             if embed_data['title']:
-                                content_parts.append(f"**{embed_data['title']}**")
+                                embed_parts.append(f"**{embed_data['title']}**")
                             if embed_data['description']:
-                                content_parts.append(embed_data['description'])
+                                embed_parts.append(embed_data['description'])
                             if embed_data['url']:
-                                content_parts.append(f"🔗 {embed_data['url']}")
+                                embed_parts.append(f"🔗 {embed_data['url']}")
+                            if embed_data['author']:
+                                embed_parts.append(f"👤 {embed_data['author']}")
+                            if embed_data['footer']:
+                                embed_parts.append(f"� {embed_data['footer']}")
+                            
                             # Add embed fields
                             for field in embed_data['fields']:
-                                content_parts.append(f"**{field['name']}**: {field['value']}")
+                                embed_parts.append(f"**{field['name']}**: {field['value']}")
+                            
+                            if embed_parts:
+                                content_parts.append("📋 **Embed:**\n" + "\n".join(embed_parts))
+                        
+                        # Add detailed attachment info
+                        if pin_data['attachments']:
+                            att_parts = []
+                            for att in pin_data['attachments']:
+                                size_mb = att['size'] / (1024 * 1024) if att['size'] else 0
+                                att_info = f"📎 [{att['filename']}]({att['url']})"
+                                if size_mb > 0:
+                                    att_info += f" ({size_mb:.1f} MB)"
+                                if att.get('content_type'):
+                                    att_info += f" - {att['content_type']}"
+                                att_parts.append(att_info)
+                            content_parts.append("📁 **Attachments:**\n" + "\n".join(att_parts))
                         
                         # Combine all content
                         if content_parts:
                             description = "\n\n".join(content_parts)
                         else:
-                            # For messages with no text/embeds, show what type it is
-                            msg_type = "System message" if pin_data['message_type'] != discord.MessageType.default else "Message"
-                            description = f"*[{msg_type} - see attachments or original for full content]*"
+                            # Still no content found - this might be a very special message type
+                            msg_type_name = pin_data['message_type'].name if hasattr(pin_data['message_type'], 'name') else str(pin_data['message_type'])
+                            description = f"*[{msg_type_name} message - ID: {pin_data['message_id']}]*\n\n⚠️ No extractable content found. This might be a special message type that requires different handling."
+                        
+                        # Add debug info to description
+                        debug_info = f"\n\n🔍 **Debug Info:**\nOriginal had: "
+                        debug_parts = []
+                        if pin_data['content']: debug_parts.append("text")
+                        if pin_data['embeds']: debug_parts.append(f"{len(pin_data['embeds'])} embeds")
+                        if pin_data['attachments']: debug_parts.append(f"{len(pin_data['attachments'])} attachments")
+                        if pin_data['system_content']: debug_parts.append("system content")
+                        debug_info += ", ".join(debug_parts) if debug_parts else "no detectable content"
+                        description += debug_info
                         
                         # Limit description length (Discord embed limit is 4096 chars)
                         if len(description) > 4000:
