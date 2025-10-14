@@ -1,26 +1,32 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div style="max-width: 400px; margin: 50px auto;">
-    <h2 style="text-align: center; margin-bottom: 30px;">Enter Password</h2>
+<div style="max-width: 420px; margin: 0 auto; padding: 40px 20px;">
+    <div style="text-align: center; margin-bottom: 40px;">
+        <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #1f2937, #000000); display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; font-size: 32px;">◆</div>
+        <h2 style="color: #f1f5f9; font-size: 28px; font-weight: 700; margin-bottom: 8px;">Welcome Back</h2>
+        <p style="color: #94a3b8; font-size: 16px;">Enter your password to access Black Diamond Archive</p>
+    </div>
     
-    <form method="POST" style="display: flex; flex-direction: column; gap: 20px;">
-        <input 
-            type="password" 
-            name="password" 
-            placeholder="Password" 
-            required 
-            style="padding: 15px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px;"
-            autofocus
-        >
+    <form method="POST" style="display: flex; flex-direction: column; gap: 24px;">
+        <div>
+            <input 
+                type="password" 
+                name="password" 
+                placeholder="Enter password" 
+                required 
+                style="width: 100%; padding: 16px 20px; border: 1px solid #475569; border-radius: 12px; font-size: 16px; background: #1e293b; color: #e2e8f0; transition: border-color 0.2s ease, box-shadow 0.2s ease;"
+                autofocus
+                onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 3px rgba(59, 130, 246, 0.2)'"
+                onblur="this.style.borderColor='#475569'; this.style.boxShadow='none'"
+            >
+        </div>
         
-        <button type="submit" class="btn" style="padding: 15px; font-size: 16px;">
-            🔓 Access Pins
+        <button type="submit" class="btn" style="width: 100%; padding: 16px; font-size: 16px; font-weight: 600; justify-content: center;">
+            ◆ Access Archive
         </button>
     </form>
     
-    <div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px; font-size: 14px; color: #666;">
-        <strong>Note:</strong> Enter the password to view saved Discord pins from channel resets.
-    </div>
+
 </div>
 {% endblock %}
