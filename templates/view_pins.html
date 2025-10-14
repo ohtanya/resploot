@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
-{% block content %}
+        {% if data.get('archive_type') == 'full_messages' %}
+            📦 #{{ data.channel_name }}
+        {% else %}
+            📌 #{{ data.channel_name }}
+        {% endif %}ock content %}
 <div style="margin-bottom: 20px;">
     <a href="{{ url_for('index') }}" class="btn btn-seconda            <!-- Reactions -->
             {% if item.reactions %}
@@ -19,7 +23,7 @@
             <!-- Message metadata -->
             <div style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
                 Message ID: {{ item.id }} • Created: {{ item.created_at[:19].replace('T', ' ') }}
-                {% if item.is_pinned %}• 📌 Pinned{% endif %}
+                {% if item.get('is_pinned') %}• 📌 Pinned{% endif %}
             </div>Archives</a>
 </div>
 
@@ -33,16 +37,16 @@
     </h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px; color: #666;">
         <div><strong>Archive Date:</strong> {{ (data.reset_timestamp or data.archive_timestamp)[:19].replace('T', ' ') }}</div>
-        {% if data.archive_type == 'full_messages' %}
-            <div><strong>Total Messages:</strong> {{ data.message_count }}</div>
+        {% if data.get('archive_type') == 'full_messages' %}
+            <div><strong>Total Messages:</strong> {{ data.get('message_count', 0) }}</div>
         {% else %}
-            <div><strong>Total Pins:</strong> {{ data.pin_count }}</div>
+            <div><strong>Total Pins:</strong> {{ data.get('pin_count', 0) }}</div>
         {% endif %}
         <div><strong>Archive File:</strong> {{ filename }}</div>
     </div>
 </div>
 
-{% set items = data.messages if data.archive_type == 'full_messages' else data.pins %}
+{% set items = data.messages if data.get('archive_type') == 'full_messages' else data.get('pins', []) %}
 {% if items %}
     <div style="display: grid; gap: 20px;">
         {% for item in items %}
@@ -59,7 +63,7 @@
                 <div>
                     <div style="font-weight: bold; color: #333;">
                         {{ item.author.name }}
-                        {% if item.is_pinned %}
+                        {% if item.get('is_pinned') %}
                             📌
                         {% endif %}
                     </div>
