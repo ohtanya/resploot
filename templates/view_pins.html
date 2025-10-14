@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
 {% block title %}
-        {% if data.get('archive_type') == 'full_messages' %}
-            📦 #{{ data.channel_name }}
-        {% else %}
-            📌 #{{ data.channel_name }}
-        {% endif %}
+    {% if data.get('archive_type') == 'full_messages' %}
+        📦 #{{ data.channel_name }}
+    {% else %}
+        📌 #{{ data.channel_name }}
+    {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -15,13 +15,13 @@
 
 <!-- Archive Header -->
 <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-        {% if data.get('archive_type') == 'full_messages' %}
-            <h1 style="margin: 0; color: #333;">📦 #{{ data.channel_name }} Full Archive</h1>
-            <p style="margin: 10px 0 0; color: #666;">{{ items|length }} messages archived on {{ data.archived_date }}</p>
-        {% else %}
-            <h1 style="margin: 0; color: #333;">📌 #{{ data.channel_name }} Pins</h1>
-            <p style="margin: 10px 0 0; color: #666;">{{ items|length }} pins archived on {{ data.archived_date }}</p>
-        {% endif %}
+    {% if data.get('archive_type') == 'full_messages' %}
+        <h1 style="margin: 0; color: #333;">📦 #{{ data.channel_name }} Full Archive</h1>
+        <p style="margin: 10px 0 0; color: #666;">{{ data.get('message_count', 0) }} messages archived on {{ data.archived_date }}</p>
+    {% else %}
+        <h1 style="margin: 0; color: #333;">📌 #{{ data.channel_name }} Pins</h1>
+        <p style="margin: 10px 0 0; color: #666;">{{ data.get('pins', [])|length }} pins archived on {{ data.archived_date }}</p>
+    {% endif %}
 </div>
 
 <!-- Search -->
@@ -33,216 +33,148 @@
 {% endif %}
 
 <!-- Messages/Pins -->
+{% set items = data.messages if data.get('archive_type') == 'full_messages' else data.get('pins', []) %}
 <div id="messageContainer">
 {% if items %}
     {% for item in items %}
-    <div class="message-item" data-content="{{ item.content|lower }}">
-        <div style="background-color: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; position: relative;">
-            <!-- Author -->
-            <div style="display: flex; align-items: center; margin-bottom: 10px; gap: 10px;">
-                {% if item.author.avatar_url %}
-                <img src="{{ item.author.avatar_url }}" alt="{{ item.author.display_name }}" 
-                     style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid #ddd;">
-                {% endif %}
-                <div>
-                    <strong style="color: #333;">{{ item.author.display_name }}</strong>
-                    <div style="font-size: 12px; color: #666;">
-                        {{ item.timestamp }}
-                        {% if item.get('is_pinned') %}
-                        <span style="color: #ff6b6b;">• 📌 Pinned</span>
-                        {% endif %}
-                    </div>
+    <div class="message-item" data-content="{{ item.content|lower }}" style="background-color: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+        <!-- Author -->
+        <div style="display: flex; align-items: center; margin-bottom: 10px; gap: 10px;">
+            {% if item.author.avatar_url %}
+            <img src="{{ item.author.avatar_url }}" alt="{{ item.author.display_name }}" 
+                 style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid #ddd;">
+            {% endif %}
+            <div>
+                <strong style="color: #333;">{{ item.author.display_name }}</strong>
+                <div style="font-size: 12px; color: #666;">
+                    {{ item.timestamp }}
+                    {% if item.get('is_pinned') %}
+                    <span style="color: #ff6b6b;">• 📌 Pinned</span>
+                    {% endif %}
                 </div>
             </div>
+        </div>
 
-            <!-- Content -->
-            {% if item.content %}
-            <div style="margin-bottom: 15px; color: #333; line-height: 1.6;">
-                {{ item.content|replace('\n', '<br>')|safe }}
-                {% if item.attachments %}
-                <div style="margin-top: 10px; font-size: 12px; color: #666;">
-                    📎 {{ item.attachments|length }} attachment(s)
-                </div>
-                {% endif %}
-            {% endif %}
-            {% if item.reactions %}
-            <div style="margin-bottom: 15px;">
-                <h4 style="margin-bottom: 10px; color: #333;">💝 Reactions:</h4>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    {% for reaction in item.reactions %}
-                    <span style="background-color: #f0f0f0; padding: 4px 8px; border-radius: 12px; font-size: 14px;">
-                        {{ reaction.emoji }} {{ reaction.count }}
-                    </span>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Message metadata -->
-            <div style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
-                Message ID: {{ item.id }} • Created: {{ item.created_at[:19].replace('T', ' ') }}
-                {% if item.get('is_pinned') %}• 📌 Pinned{% endif %}
-            </div>Archives</a>
-</div>
-
-<div style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; background-color: #f8f9fa; margin-bottom: 20px;">
-    <h2 style="color: #5865f2; margin-bottom: 10px;">
-        {% if data.archive_type == 'full_messages' %}
-            📦 #{{ data.channel_name }}
-        {% else %}
-            � #{{ data.channel_name }}
+        <!-- Content -->
+        {% if item.content %}
+        <div style="margin-bottom: 15px; color: #333; line-height: 1.6;">
+            {{ item.content|replace('\n', '<br>')|safe }}
+        </div>
         {% endif %}
-    </h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px; color: #666;">
-        <div><strong>Archive Date:</strong> {{ (data.reset_timestamp or data.archive_timestamp)[:19].replace('T', ' ') }}</div>
-        {% if data.get('archive_type') == 'full_messages' %}
-            <div><strong>Total Messages:</strong> {{ data.get('message_count', 0) }}</div>
-        {% else %}
-            <div><strong>Total Pins:</strong> {{ data.get('pin_count', 0) }}</div>
-        {% endif %}
-        <div><strong>Archive File:</strong> {{ filename }}</div>
-    </div>
-</div>
 
-{% set items = data.messages if data.get('archive_type') == 'full_messages' else data.get('pins', []) %}
-{% if items %}
-    <div style="display: grid; gap: 20px;">
-        {% for item in items %}
-        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; background-color: white;">
-            <!-- Author info -->
-            <div style="display: flex; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
-                {% if item.author.avatar_url %}
-                <img src="{{ item.author.avatar_url }}" alt="Avatar" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px;">
-                {% else %}
-                <div style="width: 40px; height: 40px; border-radius: 50%; background-color: #5865f2; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: 12px;">
-                    {{ item.author.name[0].upper() }}
-                </div>
-                {% endif %}
-                <div>
-                    <div style="font-weight: bold; color: #333;">
-                        {{ item.author.name }}
-                        {% if item.get('is_pinned') %}
-                            📌
-                        {% endif %}
-                    </div>
-                    <div style="font-size: 12px; color: #666;">{{ item.created_at[:19].replace('T', ' ') }}</div>
-                </div>
-            </div>
-
-            <!-- Message content -->
-            {% if item.content %}
-            <div style="margin-bottom: 15px; line-height: 1.5; white-space: pre-wrap;">{{ item.content }}</div>
-            {% else %}
-            <div style="margin-bottom: 15px; font-style: italic; color: #666;">
-                {% if item.attachments %}
-                    <em>This message contains attachments but no text content.</em>
-                {% elif item.embeds %}
-                    <em>This message contains embeds but no text content.</em>
-                {% else %}
-                    <em>This message has no text content, attachments, or embeds.</em>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            <!-- Attachments -->
-            {% if item.attachments %}
-            <div style="margin-bottom: 15px;">
-                <h4 style="margin-bottom: 10px; color: #333;">📎 Attachments ({{ item.attachments|length }}):</h4>
-                <div style="display: grid; gap: 10px;">
-                    {% for attachment in item.attachments %}
-                    <div style="border: 1px solid #ddd; border-radius: 5px; padding: 12px; background-color: #f8f9fa;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <div style="font-weight: bold;">{{ attachment.filename }}</div>
-                                <div style="font-size: 12px; color: #666;">
-                                    {% if attachment.size %}
-                                        {{ "%.2f"|format(attachment.size / 1024 / 1024) }} MB
-                                    {% endif %}
-                                    {% if attachment.content_type %}
-                                        • {{ attachment.content_type }}
-                                    {% endif %}
-                                    {% if attachment.downloaded %}
-                                        • ✅ Saved locally
-                                    {% elif attachment.get('downloaded') == false %}
-                                        • ❌ Download failed
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% if attachment.downloaded and attachment.local_filename %}
-                                <a href="{{ url_for('serve_attachment', filename=attachment.local_filename) }}" target="_blank" class="btn" style="padding: 6px 12px; font-size: 14px;">
-                                    View/Download
-                                </a>
-                            {% else %}
-                                <a href="{{ attachment.original_url or attachment.url }}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 14px;">
-                                    Original URL
-                                </a>
+        <!-- Attachments -->
+        {% if item.attachments %}
+        <div style="margin-bottom: 15px;">
+            <h4 style="margin-bottom: 10px; color: #333;">📎 Attachments:</h4>
+            <div style="display: grid; gap: 10px;">
+                {% for attachment in item.attachments %}
+                <div style="border: 1px solid #ddd; border-radius: 4px; padding: 10px; background-color: #f9f9f9;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <strong style="color: #333;">{{ attachment.filename }}</strong>
+                        <div style="font-size: 12px; color: #666;">
+                            {% if attachment.size %}
+                            {{ "%.1f KB"|format(attachment.size / 1024) }}
+                            {% endif %}
+                            {% if attachment.content_type %}
+                            • {{ attachment.content_type }}
+                            {% endif %}
+                            {% if attachment.downloaded %}
+                            • ✅ Downloaded
                             {% endif %}
                         </div>
-                        {% if attachment.content_type and attachment.content_type.startswith('image/') %}
-                        <div style="margin-top: 10px;">
-                            {% if attachment.downloaded and attachment.local_filename %}
-                                <img src="{{ url_for('serve_attachment', filename=attachment.local_filename) }}" alt="{{ attachment.filename }}" style="max-width: 100%; max-height: 300px; border-radius: 4px;">
-                            {% else %}
-                                <img src="{{ attachment.original_url or attachment.url }}" alt="{{ attachment.filename }}" style="max-width: 100%; max-height: 300px; border-radius: 4px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                                <div style="display: none; padding: 20px; background-color: #f0f0f0; border-radius: 4px; text-align: center; color: #666;">
-                                    <p>🖼️ Image no longer available</p>
-                                    <p style="font-size: 12px;">Original: {{ attachment.filename }}</p>
-                                </div>
-                            {% endif %}
-                        </div>
-                        {% endif %}
                     </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Embeds -->
-            {% if item.embeds %}
-            <div style="margin-bottom: 15px;">
-                <h4 style="margin-bottom: 10px; color: #333;">📄 Embeds ({{ item.embeds|length }}):</h4>
-                {% for embed in item.embeds %}
-                <div style="border-left: 4px solid #5865f2; padding: 12px; background-color: #f8f9fa; margin-bottom: 10px; border-radius: 4px;">
-                    {% if embed.title %}
-                    <div style="font-weight: bold; margin-bottom: 8px; color: #333;">{{ embed.title }}</div>
+                    {% if attachment.downloaded and attachment.local_filename %}
+                    <div style="margin-bottom: 5px;">
+                        <a href="{{ url_for('serve_attachment', filename=attachment.local_filename) }}" 
+                           style="color: #5865f2; text-decoration: none;" download="{{ attachment.filename }}">
+                            💾 Download
+                        </a>
+                    </div>
                     {% endif %}
-                    {% if embed.description %}
-                    <div style="margin-bottom: 8px; color: #555;">{{ embed.description }}</div>
-                    {% endif %}
-                    {% if embed.url %}
-                    <div style="font-size: 12px;">
-                        <a href="{{ embed.url }}" target="_blank" style="color: #5865f2;">{{ embed.url }}</a>
+                    {% if attachment.content_type and attachment.content_type.startswith('image/') %}
+                    <div style="margin-top: 10px;">
+                        {% if attachment.downloaded and attachment.local_filename %}
+                        <img src="{{ url_for('serve_attachment', filename=attachment.local_filename) }}" 
+                             alt="{{ attachment.filename }}" 
+                             style="max-width: 100%; max-height: 400px; border-radius: 4px; cursor: pointer;"
+                             onclick="window.open(this.src, '_blank')">
+                        {% else %}
+                        <a href="{{ attachment.url }}" target="_blank" style="color: #5865f2; text-decoration: none;">
+                            🖼️ View Image (External)
+                        </a>
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>
                 {% endfor %}
             </div>
-            {% endif %}
+        </div>
+        {% endif %}
 
-            <!-- Reactions -->
-            {% if pin.reactions %}
-            <div style="margin-bottom: 10px;">
-                <h4 style="margin-bottom: 8px; color: #333;">👍 Reactions:</h4>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    {% for reaction in pin.reactions %}
-                    <span style="background-color: #f0f0f0; padding: 4px 8px; border-radius: 12px; font-size: 14px;">
-                        {{ reaction.emoji }} {{ reaction.count }}
-                    </span>
-                    {% endfor %}
-                </div>
+        <!-- Embeds -->
+        {% if item.embeds %}
+        <div style="margin-bottom: 15px;">
+            <h4 style="margin-bottom: 10px; color: #333;">🔗 Embeds:</h4>
+            {% for embed in item.embeds %}
+            <div style="border-left: 4px solid #5865f2; padding: 10px; background-color: #f9f9f9; margin-bottom: 10px;">
+                {% if embed.title %}
+                <div style="font-weight: bold; margin-bottom: 5px;">{{ embed.title }}</div>
+                {% endif %}
+                {% if embed.description %}
+                <div style="margin-bottom: 5px;">{{ embed.description }}</div>
+                {% endif %}
+                {% if embed.url %}
+                <div><a href="{{ embed.url }}" target="_blank" style="color: #5865f2;">{{ embed.url }}</a></div>
+                {% endif %}
             </div>
-            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
 
-            <!-- Pin metadata -->
-            <div style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
-                Pin ID: {{ pin.id }} • Created: {{ pin.created_at[:19].replace('T', ' ') }}
+        <!-- Reactions -->
+        {% if item.reactions %}
+        <div style="margin-bottom: 15px;">
+            <h4 style="margin-bottom: 10px; color: #333;">💝 Reactions:</h4>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                {% for reaction in item.reactions %}
+                <span style="background-color: #f0f0f0; padding: 4px 8px; border-radius: 12px; font-size: 14px;">
+                    {{ reaction.emoji }} {{ reaction.count }}
+                </span>
+                {% endfor %}
             </div>
         </div>
-        {% endfor %}
+        {% endif %}
+
+        <!-- Message metadata -->
+        <div style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
+            Message ID: {{ item.id }} • Created: {{ item.created_at[:19].replace('T', ' ') }}
+            {% if item.get('is_pinned') %}• 📌 Pinned{% endif %}
+        </div>
     </div>
+    {% endfor %}
 {% else %}
     <div style="text-align: center; padding: 40px; color: #666;">
-        <h3>No pins found in this archive</h3>
+        <h3>No items found in this archive</h3>
     </div>
+{% endif %}
+</div>
+
+<!-- Search functionality for full messages -->
+{% if data.get('archive_type') == 'full_messages' %}
+<script>
+document.getElementById('searchInput').addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const messages = document.querySelectorAll('.message-item');
+    
+    messages.forEach(function(message) {
+        const content = message.getAttribute('data-content') || '';
+        if (content.includes(searchTerm)) {
+            message.style.display = 'block';
+        } else {
+            message.style.display = 'none';
+        }
+    });
+});
+</script>
 {% endif %}
 {% endblock %}
