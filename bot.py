@@ -96,6 +96,7 @@ async def download_attachment(session, attachment, timestamp):
                     "filename": original_filename,
                     "local_path": local_path,
                     "local_filename": safe_filename,
+                    "url": attachment.url,
                     "original_url": attachment.url,
                     "size": attachment.size,
                     "content_type": attachment.content_type,
@@ -105,6 +106,7 @@ async def download_attachment(session, attachment, timestamp):
                 print(f"Failed to download attachment {original_filename}: HTTP {response.status}")
                 return {
                     "filename": original_filename,
+                    "url": attachment.url,
                     "original_url": attachment.url,
                     "size": attachment.size,
                     "content_type": attachment.content_type,
@@ -116,6 +118,7 @@ async def download_attachment(session, attachment, timestamp):
         print(f"Error downloading attachment {attachment.filename}: {e}")
         return {
             "filename": attachment.filename,
+            "url": attachment.url,
             "original_url": attachment.url,
             "size": attachment.size,
             "content_type": attachment.content_type,
@@ -137,8 +140,11 @@ async def save_pins_to_json(channel_name, pins):
             "pins": []
         }
         
-        # Extract data from each pin (without downloading attachments for now)
-        for pin in reversed(pins):  # Reverse to keep chronological order
+        # Extract data from each pin and download attachments
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30, connect=10)  # 30s total, 10s connect timeout
+        ) as session:
+            for pin in reversed(pins):  # Reverse to keep chronological order
                 try:
                     # Debug: Print pin information
                     print(f"Processing pin {pin.id}")
@@ -147,7 +153,43 @@ async def save_pins_to_json(channel_name, pins):
                     print(f"  Attachments: {len(pin.attachments)}")
                     print(f"  Embeds: {len(pin.embeds)}")
                     
-                    # Simple attachment info without downloading (to prevent timeouts)
+                    # Download attachments with robust error handling
+                    attachment_data = []
+                    if pin.attachments:
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        for att in pin.attachments:
+                            print(f"  Downloading attachment: {att.filename}")
+                            try:
+                                # Download with individual timeout per attachment
+                                attachment_info = await asyncio.wait_for(
+                                    download_attachment(session, att, timestamp),
+                                    timeout=20.0  # 20 second timeout per attachment
+                                )
+                                attachment_data.append(attachment_info)
+                                print(f"  ✓ Downloaded: {att.filename}")
+                            except asyncio.TimeoutError:
+                                print(f"  ⚠ Timeout downloading {att.filename}, continuing...")
+                                attachment_data.append({
+                                    "filename": att.filename,
+                                    "url": att.url,
+                                    "original_url": att.url,
+                                    "size": att.size,
+                                    "content_type": att.content_type,
+                                    "downloaded": False,
+                                    "error": "Download timeout"
+                                })
+                            except Exception as e:
+                                print(f"  ✗ Error downloading {att.filename}: {e}")
+                                attachment_data.append({
+                                    "filename": att.filename,
+                                    "url": att.url,
+                                    "original_url": att.url,
+                                    "size": att.size,
+                                    "content_type": att.content_type,
+                                    "downloaded": False,
+                                    "error": str(e)
+                                })
+                    
                     pin_data = {
                         "id": pin.id,
                         "author": {
@@ -159,17 +201,7 @@ async def save_pins_to_json(channel_name, pins):
                         "content": pin.content,
                         "created_at": pin.created_at.isoformat(),
                         "jump_url": pin.jump_url,
-                        "attachments": [
-                            {
-                                "filename": att.filename,
-                                "url": att.url,
-                                "original_url": att.url,
-                                "size": att.size,
-                                "content_type": att.content_type,
-                                "downloaded": False
-                            }
-                            for att in pin.attachments
-                        ],
+                        "attachments": attachment_data,
                         "embeds": [embed.to_dict() for embed in pin.embeds] if pin.embeds else [],
                         "reactions": [
                             {
