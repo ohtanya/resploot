@@ -377,13 +377,15 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
             pinned_count = len(pins)
             archived_count = 0
             
-                if pinned_count > 0:
+            if pinned_count > 0:
                 # Save pins to JSON file for web interface
                 try:
                     json_file = await save_pins_to_json(channel_name, pins)
                 except Exception as e:
                     print(f"Error saving pins to JSON: {e}")
-                    json_file = None                # Find or create archive channel BEFORE deleting the main channel
+                    json_file = None
+                
+                # Find or create archive channel BEFORE deleting the main channel
                 archive_channel = discord.utils.get(guild.text_channels, name=archive_name)
                 if not archive_channel:
                     archive_channel = await guild.create_text_channel(
