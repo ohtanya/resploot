@@ -6,7 +6,7 @@
 </div>
 
 <div style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; background-color: #f8f9fa; margin-bottom: 20px;">
-    <h2 style="color: #5865f2; margin-bottom: 10px;">📺 #{data.channel_name}</h2>
+    <h2 style="color: #5865f2; margin-bottom: 10px;">📺 #{{ data.channel_name }}</h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px; color: #666;">
         <div><strong>Reset Date:</strong> {{ data.reset_timestamp[:19].replace('T', ' ') }}</div>
         <div><strong>Total Pins:</strong> {{ data.pin_count }}</div>
