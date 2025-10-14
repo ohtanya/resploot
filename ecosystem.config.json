@@ -25,6 +25,7 @@
     "autorestart": true,
     "watch": false,
     "max_memory_restart": "512M",
+    "env_file": ".env",
     "env": {
       "NODE_ENV": "production",
       "FLASK_ENV": "production"
