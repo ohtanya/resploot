@@ -65,15 +65,34 @@
                                     {% if attachment.content_type %}
                                         • {{ attachment.content_type }}
                                     {% endif %}
+                                    {% if attachment.downloaded %}
+                                        • ✅ Saved locally
+                                    {% elif attachment.get('downloaded') == false %}
+                                        • ❌ Download failed
+                                    {% endif %}
                                 </div>
                             </div>
-                            <a href="{{ attachment.url }}" target="_blank" class="btn" style="padding: 6px 12px; font-size: 14px;">
-                                Download
-                            </a>
+                            {% if attachment.downloaded and attachment.local_filename %}
+                                <a href="{{ url_for('serve_attachment', filename=attachment.local_filename) }}" target="_blank" class="btn" style="padding: 6px 12px; font-size: 14px;">
+                                    View/Download
+                                </a>
+                            {% else %}
+                                <a href="{{ attachment.original_url or attachment.url }}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 14px;">
+                                    Original URL
+                                </a>
+                            {% endif %}
                         </div>
                         {% if attachment.content_type and attachment.content_type.startswith('image/') %}
                         <div style="margin-top: 10px;">
-                            <img src="{{ attachment.url }}" alt="{{ attachment.filename }}" style="max-width: 100%; max-height: 300px; border-radius: 4px;">
+                            {% if attachment.downloaded and attachment.local_filename %}
+                                <img src="{{ url_for('serve_attachment', filename=attachment.local_filename) }}" alt="{{ attachment.filename }}" style="max-width: 100%; max-height: 300px; border-radius: 4px;">
+                            {% else %}
+                                <img src="{{ attachment.original_url or attachment.url }}" alt="{{ attachment.filename }}" style="max-width: 100%; max-height: 300px; border-radius: 4px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                <div style="display: none; padding: 20px; background-color: #f0f0f0; border-radius: 4px; text-align: center; color: #666;">
+                                    <p>🖼️ Image no longer available</p>
+                                    <p style="font-size: 12px;">Original: {{ attachment.filename }}</p>
+                                </div>
+                            {% endif %}
                         </div>
                         {% endif %}
                     </div>

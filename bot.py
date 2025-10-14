@@ -6,6 +6,9 @@ import datetime
 import pytz
 import json
 import asyncio
+import aiohttp
+import mimetypes
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # Load environment variables from .env
@@ -22,6 +25,7 @@ GUILD_ID = None  # Set to None for global commands, or specify server ID for fas
 TIMEZONE = "America/Los_Angeles"  # Change this to your timezone
 SCHEDULES_FILE = "schedules.json"
 PINS_DATA_DIR = "pins_data"  # Directory to store pin JSON files
+ATTACHMENTS_DIR = "pins_data/attachments"  # Directory to store downloaded attachments
 
 # Dictionary to store scheduled resets: {channel_name: [{'hour': X, 'minute': Y, 'type': 'text/voice', 'category': 'category_name', 'last_reset': 'YYYY-MM-DD-HH:MM'}]}
 scheduled_resets = {}
@@ -66,7 +70,60 @@ def save_schedules():
     except Exception as e:
         print(f"Error saving schedules: {e}")
 
-def save_pins_to_json(channel_name, pins):
+async def download_attachment(session, attachment, timestamp):
+    """Download an attachment and save it locally"""
+    try:
+        # Create attachments directory if it doesn't exist
+        os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
+        
+        # Parse the URL to get file extension
+        parsed_url = urlparse(attachment.url)
+        original_filename = attachment.filename
+        
+        # Create a safe filename with timestamp to avoid collisions
+        safe_filename = f"{timestamp}_{attachment.id}_{original_filename}"
+        local_path = os.path.join(ATTACHMENTS_DIR, safe_filename)
+        
+        # Download the file
+        async with session.get(attachment.url) as response:
+            if response.status == 200:
+                with open(local_path, 'wb') as f:
+                    async for chunk in response.content.iter_chunked(8192):
+                        f.write(chunk)
+                
+                print(f"Downloaded attachment: {safe_filename}")
+                return {
+                    "filename": original_filename,
+                    "local_path": local_path,
+                    "local_filename": safe_filename,
+                    "original_url": attachment.url,
+                    "size": attachment.size,
+                    "content_type": attachment.content_type,
+                    "downloaded": True
+                }
+            else:
+                print(f"Failed to download attachment {original_filename}: HTTP {response.status}")
+                return {
+                    "filename": original_filename,
+                    "original_url": attachment.url,
+                    "size": attachment.size,
+                    "content_type": attachment.content_type,
+                    "downloaded": False,
+                    "error": f"HTTP {response.status}"
+                }
+                
+    except Exception as e:
+        print(f"Error downloading attachment {attachment.filename}: {e}")
+        return {
+            "filename": attachment.filename,
+            "original_url": attachment.url,
+            "size": attachment.size,
+            "content_type": attachment.content_type,
+            "downloaded": False,
+            "error": str(e)
+        }
+
+async def save_pins_to_json(channel_name, pins):
     """Save pinned messages to JSON file"""
     try:
         # Create pins data directory if it doesn't exist
@@ -80,48 +137,50 @@ def save_pins_to_json(channel_name, pins):
             "pins": []
         }
         
-        # Extract data from each pin
-        for pin in reversed(pins):  # Reverse to keep chronological order
-            try:
-                # Debug: Print pin information
-                print(f"Processing pin {pin.id}")
-                print(f"  Content: '{pin.content}' (length: {len(pin.content)})")
-                print(f"  Author: {pin.author.display_name}")
-                print(f"  Attachments: {len(pin.attachments)}")
-                print(f"  Embeds: {len(pin.embeds)}")
-                
-                pin_data = {
-                    "id": pin.id,
-                    "author": {
-                        "name": pin.author.display_name,
-                        "username": str(pin.author),
-                        "id": pin.author.id,
-                        "avatar_url": str(pin.author.display_avatar.url) if pin.author.display_avatar else None
-                    },
-                    "content": pin.content,
-                    "created_at": pin.created_at.isoformat(),
-                    "jump_url": pin.jump_url,
-                    "attachments": [
-                        {
-                            "filename": att.filename,
-                            "url": att.url,
-                            "size": att.size,
-                            "content_type": att.content_type
-                        }
-                        for att in pin.attachments
-                    ],
-                    "embeds": [embed.to_dict() for embed in pin.embeds] if pin.embeds else [],
-                    "reactions": [
-                        {
-                            "emoji": str(reaction.emoji),
-                            "count": reaction.count
-                        }
-                        for reaction in pin.reactions
-                    ] if pin.reactions else []
-                }
-                pins_data["pins"].append(pin_data)
-            except Exception as e:
-                print(f"Error processing pin {pin.id}: {e}")
+        # Create HTTP session for downloading attachments
+        async with aiohttp.ClientSession() as session:
+            # Extract data from each pin
+            for pin in reversed(pins):  # Reverse to keep chronological order
+                try:
+                    # Debug: Print pin information
+                    print(f"Processing pin {pin.id}")
+                    print(f"  Content: '{pin.content}' (length: {len(pin.content)})")
+                    print(f"  Author: {pin.author.display_name}")
+                    print(f"  Attachments: {len(pin.attachments)}")
+                    print(f"  Embeds: {len(pin.embeds)}")
+                    
+                    # Download attachments
+                    downloaded_attachments = []
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    
+                    for att in pin.attachments:
+                        attachment_data = await download_attachment(session, att, timestamp)
+                        downloaded_attachments.append(attachment_data)
+                    
+                    pin_data = {
+                        "id": pin.id,
+                        "author": {
+                            "name": pin.author.display_name,
+                            "username": str(pin.author),
+                            "id": pin.author.id,
+                            "avatar_url": str(pin.author.display_avatar.url) if pin.author.display_avatar else None
+                        },
+                        "content": pin.content,
+                        "created_at": pin.created_at.isoformat(),
+                        "jump_url": pin.jump_url,
+                        "attachments": downloaded_attachments,
+                        "embeds": [embed.to_dict() for embed in pin.embeds] if pin.embeds else [],
+                        "reactions": [
+                            {
+                                "emoji": str(reaction.emoji),
+                                "count": reaction.count
+                            }
+                            for reaction in pin.reactions
+                        ] if pin.reactions else []
+                    }
+                    pins_data["pins"].append(pin_data)
+                except Exception as e:
+                    print(f"Error processing pin {pin.id}: {e}")
         
         # Save to file with timestamp in filename
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

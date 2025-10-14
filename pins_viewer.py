@@ -120,6 +120,22 @@ def search_pins():
     
     return jsonify(results[:50])  # Limit to 50 results
 
+@app.route('/attachments/<path:filename>')
+@login_required
+def serve_attachment(filename):
+    """Serve downloaded attachments"""
+    try:
+        attachment_path = os.path.join(PINS_DATA_DIR, 'attachments', filename)
+        if os.path.exists(attachment_path):
+            from flask import send_file
+            return send_file(attachment_path)
+        else:
+            flash('Attachment not found', 'error')
+            return redirect(url_for('index'))
+    except Exception as e:
+        flash(f'Error serving attachment: {e}', 'error')
+        return redirect(url_for('index'))
+
 if __name__ == '__main__':
     # Create templates directory and files if they don't exist
     os.makedirs('templates', exist_ok=True)
