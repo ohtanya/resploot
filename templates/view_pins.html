@@ -2,58 +2,92 @@
 
 {% block content %}
 <div style="margin-bottom: 20px;">
-    <a href="{{ url_for('index') }}" class="btn btn-secondary">← Back to All Archives</a>
+    <a href="{{ url_for('index') }}" class="btn btn-seconda            <!-- Reactions -->
+            {% if item.reactions %}
+            <div style="margin-bottom: 15px;">
+                <h4 style="margin-bottom: 10px; color: #333;">💝 Reactions:</h4>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    {% for reaction in item.reactions %}
+                    <span style="background-color: #f0f0f0; padding: 4px 8px; border-radius: 12px; font-size: 14px;">
+                        {{ reaction.emoji }} {{ reaction.count }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Message metadata -->
+            <div style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
+                Message ID: {{ item.id }} • Created: {{ item.created_at[:19].replace('T', ' ') }}
+                {% if item.is_pinned %}• 📌 Pinned{% endif %}
+            </div>Archives</a>
 </div>
 
 <div style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; background-color: #f8f9fa; margin-bottom: 20px;">
-    <h2 style="color: #5865f2; margin-bottom: 10px;">📺 #{{ data.channel_name }}</h2>
+    <h2 style="color: #5865f2; margin-bottom: 10px;">
+        {% if data.archive_type == 'full_messages' %}
+            📦 #{{ data.channel_name }}
+        {% else %}
+            � #{{ data.channel_name }}
+        {% endif %}
+    </h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px; color: #666;">
-        <div><strong>Reset Date:</strong> {{ data.reset_timestamp[:19].replace('T', ' ') }}</div>
-        <div><strong>Total Pins:</strong> {{ data.pin_count }}</div>
+        <div><strong>Archive Date:</strong> {{ (data.reset_timestamp or data.archive_timestamp)[:19].replace('T', ' ') }}</div>
+        {% if data.archive_type == 'full_messages' %}
+            <div><strong>Total Messages:</strong> {{ data.message_count }}</div>
+        {% else %}
+            <div><strong>Total Pins:</strong> {{ data.pin_count }}</div>
+        {% endif %}
         <div><strong>Archive File:</strong> {{ filename }}</div>
     </div>
 </div>
 
-{% if data.pins %}
+{% set items = data.messages if data.archive_type == 'full_messages' else data.pins %}
+{% if items %}
     <div style="display: grid; gap: 20px;">
-        {% for pin in data.pins %}
+        {% for item in items %}
         <div style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; background-color: white;">
             <!-- Author info -->
             <div style="display: flex; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
-                {% if pin.author.avatar_url %}
-                <img src="{{ pin.author.avatar_url }}" alt="Avatar" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px;">
+                {% if item.author.avatar_url %}
+                <img src="{{ item.author.avatar_url }}" alt="Avatar" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px;">
                 {% else %}
                 <div style="width: 40px; height: 40px; border-radius: 50%; background-color: #5865f2; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: 12px;">
-                    {{ pin.author.name[0].upper() }}
+                    {{ item.author.name[0].upper() }}
                 </div>
                 {% endif %}
                 <div>
-                    <div style="font-weight: bold; color: #333;">{{ pin.author.name }}</div>
-                    <div style="font-size: 12px; color: #666;">{{ pin.created_at[:19].replace('T', ' ') }}</div>
+                    <div style="font-weight: bold; color: #333;">
+                        {{ item.author.name }}
+                        {% if item.is_pinned %}
+                            📌
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 12px; color: #666;">{{ item.created_at[:19].replace('T', ' ') }}</div>
                 </div>
             </div>
 
             <!-- Message content -->
-            {% if pin.content %}
-            <div style="margin-bottom: 15px; line-height: 1.5; white-space: pre-wrap;">{{ pin.content }}</div>
+            {% if item.content %}
+            <div style="margin-bottom: 15px; line-height: 1.5; white-space: pre-wrap;">{{ item.content }}</div>
             {% else %}
             <div style="margin-bottom: 15px; font-style: italic; color: #666;">
-                {% if pin.attachments %}
-                    <em>This pin contains attachments but no text content.</em>
-                {% elif pin.embeds %}
-                    <em>This pin contains embeds but no text content.</em>
+                {% if item.attachments %}
+                    <em>This message contains attachments but no text content.</em>
+                {% elif item.embeds %}
+                    <em>This message contains embeds but no text content.</em>
                 {% else %}
-                    <em>This pin has no text content, attachments, or embeds.</em>
+                    <em>This message has no text content, attachments, or embeds.</em>
                 {% endif %}
             </div>
             {% endif %}
 
             <!-- Attachments -->
-            {% if pin.attachments %}
+            {% if item.attachments %}
             <div style="margin-bottom: 15px;">
-                <h4 style="margin-bottom: 10px; color: #333;">📎 Attachments ({{ pin.attachments|length }}):</h4>
+                <h4 style="margin-bottom: 10px; color: #333;">📎 Attachments ({{ item.attachments|length }}):</h4>
                 <div style="display: grid; gap: 10px;">
-                    {% for attachment in pin.attachments %}
+                    {% for attachment in item.attachments %}
                     <div style="border: 1px solid #ddd; border-radius: 5px; padding: 12px; background-color: #f8f9fa;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
@@ -102,10 +136,10 @@
             {% endif %}
 
             <!-- Embeds -->
-            {% if pin.embeds %}
+            {% if item.embeds %}
             <div style="margin-bottom: 15px;">
-                <h4 style="margin-bottom: 10px; color: #333;">📄 Embeds ({{ pin.embeds|length }}):</h4>
-                {% for embed in pin.embeds %}
+                <h4 style="margin-bottom: 10px; color: #333;">📄 Embeds ({{ item.embeds|length }}):</h4>
+                {% for embed in item.embeds %}
                 <div style="border-left: 4px solid #5865f2; padding: 12px; background-color: #f8f9fa; margin-bottom: 10px; border-radius: 4px;">
                     {% if embed.title %}
                     <div style="font-weight: bold; margin-bottom: 8px; color: #333;">{{ embed.title }}</div>

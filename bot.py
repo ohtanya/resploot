@@ -237,6 +237,207 @@ async def save_pins_to_json(channel_name, pins, guild):
         print(f"Error saving pins to JSON: {e}")
         return None
 
+async def save_all_messages_to_json(channel, guild, limit=None):
+    """Save all messages from a channel to JSON file"""
+    try:
+        # Create pins data directory if it doesn't exist
+        os.makedirs(PINS_DATA_DIR, exist_ok=True)
+        
+        print(f"Starting full archive of #{channel.name}...")
+        
+        # Collect all messages
+        messages = []
+        message_count = 0
+        
+        async for message in channel.history(limit=limit, oldest_first=True):
+            message_count += 1
+            if message_count % 100 == 0:
+                print(f"  Processed {message_count} messages...")
+            
+            # Process message data similar to pins but for all messages
+            try:
+                # Download attachments with robust error handling
+                attachment_data = []
+                if message.attachments:
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    async with aiohttp.ClientSession(
+                        timeout=aiohttp.ClientTimeout(total=30, connect=10)
+                    ) as session:
+                        for att in message.attachments:
+                            try:
+                                # Download with individual timeout per attachment
+                                attachment_info = await asyncio.wait_for(
+                                    download_attachment(session, att, timestamp, guild.id),
+                                    timeout=20.0  # 20 second timeout per attachment
+                                )
+                                attachment_data.append(attachment_info)
+                                print(f"  ✓ Downloaded: {att.filename}")
+                            except asyncio.TimeoutError:
+                                print(f"  ⚠ Timeout downloading {att.filename}")
+                                attachment_data.append({
+                                    "filename": att.filename,
+                                    "url": att.url,
+                                    "original_url": att.url,
+                                    "size": att.size,
+                                    "content_type": att.content_type,
+                                    "downloaded": False,
+                                    "error": "Download timeout"
+                                })
+                            except Exception as e:
+                                print(f"  ✗ Error downloading {att.filename}: {e}")
+                                attachment_data.append({
+                                    "filename": att.filename,
+                                    "url": att.url,
+                                    "original_url": att.url,
+                                    "size": att.size,
+                                    "content_type": att.content_type,
+                                    "downloaded": False,
+                                    "error": str(e)
+                                })
+                
+                message_data = {
+                    "id": message.id,
+                    "author": {
+                        "name": message.author.display_name,
+                        "username": str(message.author),
+                        "id": message.author.id,
+                        "avatar_url": str(message.author.display_avatar.url) if message.author.display_avatar else None
+                    },
+                    "content": message.content,
+                    "created_at": message.created_at.isoformat(),
+                    "jump_url": message.jump_url,
+                    "is_pinned": message.pinned,
+                    "attachments": attachment_data,
+                    "embeds": [embed.to_dict() for embed in message.embeds] if message.embeds else [],
+                    "reactions": [
+                        {
+                            "emoji": str(reaction.emoji),
+                            "count": reaction.count
+                        }
+                        for reaction in message.reactions
+                    ] if message.reactions else []
+                }
+                messages.append(message_data)
+                
+            except Exception as e:
+                print(f"Error processing message {message.id}: {e}")
+        
+        # Prepare archive data
+        archive_data = {
+            "guild_id": guild.id,
+            "guild_name": guild.name,
+            "channel_name": channel.name,
+            "archive_type": "full_messages",
+            "archive_timestamp": datetime.datetime.now().isoformat(),
+            "message_count": len(messages),
+            "messages": messages
+        }
+        
+        # Save to file with timestamp in filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{channel.name}_FULL_{timestamp}.json"
+        filepath = os.path.join(PINS_DATA_DIR, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(archive_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"✅ Saved {len(messages)} messages to {filepath}")
+        return filepath
+        
+    except Exception as e:
+        print(f"Error saving messages to JSON: {e}")
+        return None
+        
+        # Extract data from each pin and download attachments
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30, connect=10)  # 30s total, 10s connect timeout
+        ) as session:
+            for pin in reversed(pins):  # Reverse to keep chronological order
+                try:
+                    # Debug: Print pin information
+                    print(f"Processing pin {pin.id}")
+                    print(f"  Content: '{pin.content}' (length: {len(pin.content)})")
+                    print(f"  Author: {pin.author.display_name}")
+                    print(f"  Attachments: {len(pin.attachments)}")
+                    print(f"  Embeds: {len(pin.embeds)}")
+                    
+                    # Download attachments with robust error handling
+                    attachment_data = []
+                    if pin.attachments:
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        for att in pin.attachments:
+                            print(f"  Downloading attachment: {att.filename}")
+                            try:
+                                # Download with individual timeout per attachment
+                                attachment_info = await asyncio.wait_for(
+                                    download_attachment(session, att, timestamp, guild.id),
+                                    timeout=20.0  # 20 second timeout per attachment
+                                )
+                                attachment_data.append(attachment_info)
+                                print(f"  ✓ Downloaded: {att.filename}")
+                            except asyncio.TimeoutError:
+                                print(f"  ⚠ Timeout downloading {att.filename}, continuing...")
+                                attachment_data.append({
+                                    "filename": att.filename,
+                                    "url": att.url,
+                                    "original_url": att.url,
+                                    "size": att.size,
+                                    "content_type": att.content_type,
+                                    "downloaded": False,
+                                    "error": "Download timeout"
+                                })
+                            except Exception as e:
+                                print(f"  ✗ Error downloading {att.filename}: {e}")
+                                attachment_data.append({
+                                    "filename": att.filename,
+                                    "url": att.url,
+                                    "original_url": att.url,
+                                    "size": att.size,
+                                    "content_type": att.content_type,
+                                    "downloaded": False,
+                                    "error": str(e)
+                                })
+                    
+                    pin_data = {
+                        "id": pin.id,
+                        "author": {
+                            "name": pin.author.display_name,
+                            "username": str(pin.author),
+                            "id": pin.author.id,
+                            "avatar_url": str(pin.author.display_avatar.url) if pin.author.display_avatar else None
+                        },
+                        "content": pin.content,
+                        "created_at": pin.created_at.isoformat(),
+                        "jump_url": pin.jump_url,
+                        "attachments": attachment_data,
+                        "embeds": [embed.to_dict() for embed in pin.embeds] if pin.embeds else [],
+                        "reactions": [
+                            {
+                                "emoji": str(reaction.emoji),
+                                "count": reaction.count
+                            }
+                            for reaction in pin.reactions
+                        ] if pin.reactions else []
+                    }
+                    pins_data["pins"].append(pin_data)
+                except Exception as e:
+                    print(f"Error processing pin {pin.id}: {e}")
+        
+        # Save to file with timestamp in filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{channel_name}_{timestamp}.json"
+        filepath = os.path.join(PINS_DATA_DIR, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(pins_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"Saved {len(pins)} pins to {filepath}")
+        return filepath
+        
+    except Exception as e:
+        print(f"Error saving pins to JSON: {e}")
+        return None
+
 @bot.event
 async def on_ready():
     tz = pytz.timezone(TIMEZONE)
@@ -963,6 +1164,79 @@ async def clear_channel_slash(interaction: discord.Interaction, confirm: str):
         asyncio.create_task(_delete_interaction_after_delay(interaction, 30))
         print(f"Error during channel clear: {e}")
 
+@bot.tree.command(name="archive_messages", description="Save all messages from current channel to web interface")
+@app_commands.describe(
+    limit="Maximum number of messages to archive (default: all messages)",
+    confirm="Type 'yes' to confirm archiving all messages"
+)
+async def archive_messages_slash(interaction: discord.Interaction, confirm: str, limit: int = None):
+    """Archive all messages from the current channel to the web interface"""
+    
+    # Safety check - require explicit confirmation
+    if confirm.lower() != "yes":
+        await interaction.response.send_message(
+            "⚠️ **Are you sure?** This will save ALL messages from this channel to your web interface!\n"
+            "💾 This may take a while for channels with many messages.\n"
+            "📊 All messages, attachments, and embeds will be preserved.\n"
+            "To confirm, use: `/archive_messages confirm:yes`",
+            ephemeral=True
+        )
+        return
+    
+    # Check if user has manage messages permission
+    if not interaction.user.guild_permissions.manage_messages:
+        await interaction.response.send_message("❌ You need 'Manage Messages' permission to use this command.", ephemeral=True)
+        return
+    
+    guild = interaction.guild
+    channel = interaction.channel
+    
+    # Check if this server is authorized for pin saving
+    if PINS_ENABLED_SERVER_IDS and guild.id not in PINS_ENABLED_SERVER_IDS:
+        await interaction.response.send_message(
+            f"❌ Message archiving is not enabled for this server.\n"
+            f"Server ID: {guild.id}\n"
+            f"Contact the bot owner to enable archiving for this server.",
+            ephemeral=True
+        )
+        return
+    
+    await interaction.response.send_message(f"📦 Starting archive of **#{channel.name}**...\nThis may take several minutes for large channels.", ephemeral=True)
+    
+    try:
+        # Start the archiving process
+        archive_file = await save_all_messages_to_json(channel, guild, limit)
+        
+        if archive_file:
+            # Success message
+            message_count = 0
+            try:
+                # Count messages for display
+                async for _ in channel.history(limit=limit):
+                    message_count += 1
+            except:
+                message_count = "unknown"
+            
+            embed = discord.Embed(
+                title="✅ Channel Archive Complete",
+                description=f"**#{channel.name}** has been archived to your web interface!\n\n"
+                           f"📊 **Stats:**\n"
+                           f"- Messages archived: {message_count}\n"
+                           f"- Archive file: `{os.path.basename(archive_file)}`\n"
+                           f"- Available at: Your pins web interface",
+                color=0x00ff00
+            )
+            embed.set_footer(text=f"Archive completed at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            await interaction.edit_original_response(content=None, embed=embed)
+            print(f"Full archive completed by {interaction.user}: #{channel.name} -> {archive_file}")
+        else:
+            await interaction.edit_original_response(content="❌ Failed to archive messages. Check bot logs for details.")
+            
+    except Exception as e:
+        await interaction.edit_original_response(content=f"❌ Error during archiving: {e}")
+        print(f"Error during message archiving: {e}")
+
 @bot.tree.command(name="help", description="Show help for all commands")
 async def help_slash(interaction: discord.Interaction):
     """Show help for reset commands"""
@@ -988,6 +1262,7 @@ async def help_slash(interaction: discord.Interaction):
         name="Other Commands",
         value="`/reset_now channel_name` - Manual reset\n"
               "`/resploot-clear confirm:yes` - Clear ALL messages (preserves pinned)\n"
+              "`/archive_messages confirm:yes` - Save ALL messages to web interface\n"
               "`/ping` - Test if bot is online",
         inline=False
     )

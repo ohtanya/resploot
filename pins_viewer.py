@@ -27,12 +27,12 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def load_all_pins():
-    """Load all pin files from the pins_data directory"""
-    pins_files = []
+def load_all_archives():
+    """Load all archive files (pins and full messages) from the pins_data directory"""
+    archive_files = []
     
     if not os.path.exists(PINS_DATA_DIR):
-        return pins_files
+        return archive_files
     
     # Get all JSON files in the pins directory
     json_files = glob.glob(os.path.join(PINS_DATA_DIR, "*.json"))
@@ -43,18 +43,29 @@ def load_all_pins():
                 data = json.load(f)
                 data['filename'] = os.path.basename(file_path)
                 data['file_path'] = file_path
-                pins_files.append(data)
+                
+                # Determine archive type
+                if 'archive_type' in data and data['archive_type'] == 'full_messages':
+                    data['display_type'] = 'Full Archive'
+                    data['item_count'] = data.get('message_count', 0)
+                    data['items'] = data.get('messages', [])
+                else:
+                    data['display_type'] = 'Pins Only'
+                    data['item_count'] = data.get('pin_count', 0)
+                    data['items'] = data.get('pins', [])
+                
+                archive_files.append(data)
         except Exception as e:
             print(f"Error loading {file_path}: {e}")
     
-    return pins_files
+    return archive_files
 
 @app.route('/')
 @login_required
 def index():
-    """Main page showing all saved pins"""
-    pins_files = load_all_pins()
-    return render_template('index.html', pins_files=pins_files)
+    """Main page showing all saved archives (pins and full messages)"""
+    archive_files = load_all_archives()
+    return render_template('index.html', archive_files=archive_files)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -102,19 +113,20 @@ def search_pins():
         return jsonify([])
     
     results = []
-    pins_files = load_all_pins()
+    archive_files = load_all_archives()
     
-    for file_data in pins_files:
-        for pin in file_data.get('pins', []):
+    for file_data in archive_files:
+        for item in file_data.get('items', []):
             # Search in content and author name
-            if (query in pin.get('content', '').lower() or 
-                query in pin.get('author', {}).get('name', '').lower()):
+            if (query in item.get('content', '').lower() or 
+                query in item.get('author', {}).get('name', '').lower()):
                 
                 result = {
                     'channel': file_data['channel_name'],
                     'filename': file_data['filename'],
-                    'reset_date': file_data['reset_timestamp'],
-                    'pin': pin
+                    'archive_date': file_data.get('reset_timestamp') or file_data.get('archive_timestamp'),
+                    'archive_type': file_data.get('display_type', 'Unknown'),
+                    'item': item
                 }
                 results.append(result)
     
