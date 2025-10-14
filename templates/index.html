@@ -4,13 +4,7 @@
 <div class="search-box">
     <input 
         type="text" 
-               html = `
-            <div style="padding: 24px;">
-                <h2 style="font-size: 24px; font-weight: 600; color: #f1f5f9; margin-bottom: 20px;">
-                    Search Results (${results.length})
-                </h2>
-                <div style="display: grid; gap: 16px;">
-        `;archInput" 
+        id="searchInput" 
         placeholder="🔍 Search archives by channel or content..." 
         onkeyup="searchPins()"
     >
@@ -92,7 +86,7 @@ function searchPins() {
     // Debounce search
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
-        fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        fetch('/api/search?q=' + encodeURIComponent(query))
             .then(response => response.json())
             .then(results => {
                 displaySearchResults(results);
@@ -108,44 +102,41 @@ function displaySearchResults(results) {
     const allPinsDiv = document.getElementById('allPins');
     
     if (results.length === 0) {
-        resultsDiv.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px;">
-                <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
-                <h3 style="color: #f1f5f9; margin-bottom: 8px;">No results found</h3>
-                <p style="color: #94a3b8;">Try different search terms</p>
-            </div>
-        `;
+        resultsDiv.innerHTML = 
+            '<div style="text-align: center; padding: 40px 20px;">' +
+                '<div style="font-size: 48px; margin-bottom: 16px;">🔍</div>' +
+                '<h3 style="color: #f1f5f9; margin-bottom: 8px;">No results found</h3>' +
+                '<p style="color: #94a3b8;">Try different search terms</p>' +
+            '</div>';
     } else {
-        let html = `
-            <div style="padding: 24px;">
-                <h2 style="font-size: 24px; font-weight: 600; color: #1e293b; margin-bottom: 20px;">
-                    Search Results (${results.length})
-                </h2>
-                <div style="display: grid; gap: 16px;">
-        `;
+        let html = 
+            '<div style="padding: 24px;">' +
+                '<h2 style="font-size: 24px; font-weight: 600; color: #f1f5f9; margin-bottom: 20px;">' +
+                    'Search Results (' + results.length + ')' +
+                '</h2>' +
+                '<div style="display: grid; gap: 16px;">';
         
         results.forEach(result => {
             const pin = result.pin;
             const resetDate = new Date(result.reset_date).toLocaleDateString();
             
-            html += `
-                <div style="border: 1px solid #475569; border-radius: 12px; padding: 20px; background: #334155; transition: all 0.2s ease;"
-                     onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(0, 0, 0, 0.3)'" 
-                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-                        <div>
-                            <h4 style="color: #f1f5f9; margin-bottom: 4px; font-size: 16px; font-weight: 600;">📺 #${result.channel}</h4>
-                            <p style="font-size: 12px; color: #94a3b8;">Archived: ${resetDate}</p>
-                        </div>
-                        <a href="/view/${result.filename}" class="btn btn-ghost" style="padding: 6px 12px; font-size: 14px;">View All</a>
-                    </div>
-                    <div style="border-left: 3px solid #3b82f6; padding-left: 16px;">
-                        <div style="font-weight: 600; margin-bottom: 8px; color: #f1f5f9;">${pin.author.name}</div>
-                        <div style="color: #cbd5e1; line-height: 1.5;">${pin.content || '<em style="color: #64748b;">No text content</em>'}</div>
-                        ${pin.attachments.length > 0 ? `<div style="font-size: 12px; color: #94a3b8; margin-top: 8px; display: flex; align-items: center; gap: 4px;"><span>📎</span> ${pin.attachments.length} attachment${pin.attachments.length !== 1 ? 's' : ''}</div>` : ''}
-                    </div>
-                </div>
-            `;
+            html += 
+                '<div style="border: 1px solid #475569; border-radius: 12px; padding: 20px; background: #334155; transition: all 0.2s ease;" ' +
+                     'onmouseover="this.style.transform=\'translateY(-1px)\'; this.style.boxShadow=\'0 4px 12px rgba(0, 0, 0, 0.3)\'" ' +
+                     'onmouseout="this.style.transform=\'translateY(0)\'; this.style.boxShadow=\'none\'">' +
+                    '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">' +
+                        '<div>' +
+                            '<h4 style="color: #f1f5f9; margin-bottom: 4px; font-size: 16px; font-weight: 600;">📺 #' + result.channel + '</h4>' +
+                            '<p style="font-size: 12px; color: #94a3b8;">Archived: ' + resetDate + '</p>' +
+                        '</div>' +
+                        '<a href="/view/' + result.filename + '" class="btn btn-ghost" style="padding: 6px 12px; font-size: 14px;">View All</a>' +
+                    '</div>' +
+                    '<div style="border-left: 3px solid #3b82f6; padding-left: 16px;">' +
+                        '<div style="font-weight: 600; margin-bottom: 8px; color: #f1f5f9;">' + pin.author.name + '</div>' +
+                        '<div style="color: #cbd5e1; line-height: 1.5;">' + (pin.content || '<em style="color: #64748b;">No text content</em>') + '</div>' +
+                        (pin.attachments.length > 0 ? '<div style="font-size: 12px; color: #94a3b8; margin-top: 8px; display: flex; align-items: center; gap: 4px;"><span>📎</span> ' + pin.attachments.length + ' attachment' + (pin.attachments.length !== 1 ? 's' : '') + '</div>' : '') +
+                    '</div>' +
+                '</div>';
         });
         
         html += '</div></div>';
