@@ -491,7 +491,9 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
     
     try:
         # Get all pinned messages first
-        pins = await channel.pins()
+        pins = []
+        async for pin in channel.pins():
+            pins.append(pin)
         pinned_messages = {pin.id for pin in pins}
         print(f"Found {len(pinned_messages)} pinned messages to preserve")
         
@@ -912,7 +914,9 @@ async def clear_channel_slash(interaction: discord.Interaction, confirm: str):
             total_count += 1
         
         # Count pinned messages
-        pins = await channel.pins()
+        pins = []
+        async for pin in channel.pins():
+            pins.append(pin)
         pinned_count = len(pins)
         messages_to_delete = total_count - pinned_count
         
