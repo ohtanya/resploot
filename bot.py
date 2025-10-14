@@ -12,8 +12,9 @@ from dotenv import load_dotenv
 load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
-# Bot setup - no message content intent needed for slash commands
+# Bot setup - message content intent needed to read pin content
 intents = discord.Intents.default()
+intents.message_content = True  # Required to read message content for pins
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Configuration
@@ -310,7 +311,9 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
         
         try:
             # Get pinned messages and extract ALL content BEFORE deleting channel
-            pins = await channel.pins()
+            pins = []
+            async for pin in channel.pins():
+                pins.append(pin)
             pinned_count = len(pins)
             archived_count = 0
             
