@@ -137,10 +137,8 @@ async def save_pins_to_json(channel_name, pins):
             "pins": []
         }
         
-        # Create HTTP session for downloading attachments
-        async with aiohttp.ClientSession() as session:
-            # Extract data from each pin
-            for pin in reversed(pins):  # Reverse to keep chronological order
+        # Extract data from each pin (without downloading attachments for now)
+        for pin in reversed(pins):  # Reverse to keep chronological order
                 try:
                     # Debug: Print pin information
                     print(f"Processing pin {pin.id}")
@@ -149,14 +147,7 @@ async def save_pins_to_json(channel_name, pins):
                     print(f"  Attachments: {len(pin.attachments)}")
                     print(f"  Embeds: {len(pin.embeds)}")
                     
-                    # Download attachments
-                    downloaded_attachments = []
-                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    
-                    for att in pin.attachments:
-                        attachment_data = await download_attachment(session, att, timestamp)
-                        downloaded_attachments.append(attachment_data)
-                    
+                    # Simple attachment info without downloading (to prevent timeouts)
                     pin_data = {
                         "id": pin.id,
                         "author": {
@@ -168,7 +159,17 @@ async def save_pins_to_json(channel_name, pins):
                         "content": pin.content,
                         "created_at": pin.created_at.isoformat(),
                         "jump_url": pin.jump_url,
-                        "attachments": downloaded_attachments,
+                        "attachments": [
+                            {
+                                "filename": att.filename,
+                                "url": att.url,
+                                "original_url": att.url,
+                                "size": att.size,
+                                "content_type": att.content_type,
+                                "downloaded": False
+                            }
+                            for att in pin.attachments
+                        ],
                         "embeds": [embed.to_dict() for embed in pin.embeds] if pin.embeds else [],
                         "reactions": [
                             {
@@ -376,11 +377,13 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
             pinned_count = len(pins)
             archived_count = 0
             
-            if pinned_count > 0:
+                if pinned_count > 0:
                 # Save pins to JSON file for web interface
-                json_file = save_pins_to_json(channel_name, pins)
-                
-                # Find or create archive channel BEFORE deleting the main channel
+                try:
+                    json_file = await save_pins_to_json(channel_name, pins)
+                except Exception as e:
+                    print(f"Error saving pins to JSON: {e}")
+                    json_file = None                # Find or create archive channel BEFORE deleting the main channel
                 archive_channel = discord.utils.get(guild.text_channels, name=archive_name)
                 if not archive_channel:
                     archive_channel = await guild.create_text_channel(
