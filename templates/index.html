@@ -41,6 +41,22 @@
                         <p style="color: #666; font-size: 14px;">
                             📄 File: {{ file_data.filename }}
                         </p>
+                    </div>
+                    <div>
+                        <a href="{{ url_for('view_pins', filename=file_data.filename) }}" class="btn" style="padding: 8px 16px; font-size: 14px;">
+                            View Archive
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 60px 20px; color: #666;">
+            <h3>No archives found</h3>
+            <p>Pin archives and message archives will appear here when you use the bot's archive commands.</p>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
 
