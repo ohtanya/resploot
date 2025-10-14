@@ -82,6 +82,13 @@ def save_pins_to_json(channel_name, pins):
         # Extract data from each pin
         for pin in reversed(pins):  # Reverse to keep chronological order
             try:
+                # Debug: Print pin information
+                print(f"Processing pin {pin.id}")
+                print(f"  Content: '{pin.content}' (length: {len(pin.content)})")
+                print(f"  Author: {pin.author.display_name}")
+                print(f"  Attachments: {len(pin.attachments)}")
+                print(f"  Embeds: {len(pin.embeds)}")
+                
                 pin_data = {
                     "id": pin.id,
                     "author": {

@@ -31,11 +31,6 @@
                     <div style="font-weight: bold; color: #333;">{{ pin.author.name }}</div>
                     <div style="font-size: 12px; color: #666;">{{ pin.created_at[:19].replace('T', ' ') }}</div>
                 </div>
-                {% if pin.jump_url %}
-                <a href="{{ pin.jump_url }}" target="_blank" style="margin-left: auto; padding: 6px 12px; background-color: #5865f2; color: white; text-decoration: none; border-radius: 4px; font-size: 12px;">
-                    Original Message
-                </a>
-                {% endif %}
             </div>
 
             <!-- Message content -->
