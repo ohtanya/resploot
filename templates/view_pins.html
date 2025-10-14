@@ -41,6 +41,16 @@
             <!-- Message content -->
             {% if pin.content %}
             <div style="margin-bottom: 15px; line-height: 1.5; white-space: pre-wrap;">{{ pin.content }}</div>
+            {% else %}
+            <div style="margin-bottom: 15px; font-style: italic; color: #666;">
+                {% if pin.attachments %}
+                    <em>This pin contains attachments but no text content.</em>
+                {% elif pin.embeds %}
+                    <em>This pin contains embeds but no text content.</em>
+                {% else %}
+                    <em>This pin has no text content, attachments, or embeds.</em>
+                {% endif %}
+            </div>
             {% endif %}
 
             <!-- Attachments -->
