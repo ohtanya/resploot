@@ -27,6 +27,9 @@ SCHEDULES_FILE = "schedules.json"
 PINS_DATA_DIR = "pins_data"  # Directory to store pin JSON files
 ATTACHMENTS_DIR = "pins_data/attachments"  # Directory to store downloaded attachments
 
+# Pin saving configuration - only save pins from this server (set to None to save from all servers)
+PINS_ENABLED_SERVER_ID = int(os.getenv("PINS_ENABLED_SERVER_ID")) if os.getenv("PINS_ENABLED_SERVER_ID") else None
+
 # Dictionary to store scheduled resets: {channel_name: [{'hour': X, 'minute': Y, 'type': 'text/voice', 'category': 'category_name', 'last_reset': 'YYYY-MM-DD-HH:MM'}]}
 scheduled_resets = {}
 
@@ -70,7 +73,7 @@ def save_schedules():
     except Exception as e:
         print(f"Error saving schedules: {e}")
 
-async def download_attachment(session, attachment, timestamp):
+async def download_attachment(session, attachment, timestamp, guild_id):
     """Download an attachment and save it locally"""
     try:
         # Create attachments directory if it doesn't exist
@@ -126,14 +129,16 @@ async def download_attachment(session, attachment, timestamp):
             "error": str(e)
         }
 
-async def save_pins_to_json(channel_name, pins):
+async def save_pins_to_json(channel_name, pins, guild):
     """Save pinned messages to JSON file"""
     try:
         # Create pins data directory if it doesn't exist
         os.makedirs(PINS_DATA_DIR, exist_ok=True)
         
-        # Prepare pins data
+        # Prepare pins data with server information
         pins_data = {
+            "guild_id": guild.id,
+            "guild_name": guild.name,
             "channel_name": channel_name,
             "reset_timestamp": datetime.datetime.now().isoformat(),
             "pin_count": len(pins),
@@ -162,7 +167,7 @@ async def save_pins_to_json(channel_name, pins):
                             try:
                                 # Download with individual timeout per attachment
                                 attachment_info = await asyncio.wait_for(
-                                    download_attachment(session, att, timestamp),
+                                    download_attachment(session, att, timestamp, guild.id),
                                     timeout=20.0  # 20 second timeout per attachment
                                 )
                                 attachment_data.append(attachment_info)
@@ -410,12 +415,16 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
             archived_count = 0
             
             if pinned_count > 0:
-                # Save pins to JSON file for web interface
-                try:
-                    json_file = await save_pins_to_json(channel_name, pins)
-                except Exception as e:
-                    print(f"Error saving pins to JSON: {e}")
-                    json_file = None
+                # Save pins to JSON file for web interface (only for authorized server)
+                json_file = None
+                if PINS_ENABLED_SERVER_ID is None or guild.id == PINS_ENABLED_SERVER_ID:
+                    try:
+                        json_file = await save_pins_to_json(channel_name, pins, guild)
+                        print(f"✅ Pins saved to web interface for server: {guild.name}")
+                    except Exception as e:
+                        print(f"Error saving pins to JSON: {e}")
+                else:
+                    print(f"📝 Pin saving disabled for server: {guild.name} (ID: {guild.id})")
                 
                 # Find or create archive channel BEFORE deleting the main channel
                 archive_channel = discord.utils.get(guild.text_channels, name=archive_name)
