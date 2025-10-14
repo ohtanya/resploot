@@ -138,4 +138,15 @@ if __name__ == '__main__':
     if not is_production:
         print("Press Ctrl+C to stop")
     
-    app.run(debug=not is_production, host='0.0.0.0' if is_production else '127.0.0.1', port=5001)
+    # SSL context for HTTPS (optional)
+    ssl_context = None
+    if is_production and os.path.exists('ssl_cert.pem') and os.path.exists('ssl_key.pem'):
+        ssl_context = ('ssl_cert.pem', 'ssl_key.pem')
+        print("HTTPS enabled with SSL certificate")
+    
+    app.run(
+        debug=not is_production, 
+        host='0.0.0.0' if is_production else '127.0.0.1', 
+        port=5001,
+        ssl_context=ssl_context
+    )
