@@ -131,6 +131,7 @@ if __name__ == '__main__':
     print("==================")
     print(f"Mode: {'Production' if is_production else 'Development'}")
     print(f"Password: {PASSWORD}")
+    print(f"Password length: {len(PASSWORD)}")
     print(f"Pins directory: {PINS_DATA_DIR}")
     print("")
     print("Starting web server...")

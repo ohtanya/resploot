@@ -28,7 +28,9 @@
     "env_file": ".env",
     "env": {
       "NODE_ENV": "production",
-      "FLASK_ENV": "production"
+      "FLASK_ENV": "production",
+      "PINS_VIEWER_PASSWORD": "NKvFWJs4GjQo1M",
+      "FLASK_SECRET_KEY": "ff526947e1bcc5a0b413b4671515830144f063f9ab255e679ab9acc85e9ac4f5"
     },
     "error_file": "./logs/viewer-err.log",
     "out_file": "./logs/viewer-out.log",
