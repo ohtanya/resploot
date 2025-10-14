@@ -1,12 +1,70 @@
 {% extends "base.html" %}
 
+{% block title %}
         {% if data.get('archive_type') == 'full_messages' %}
             📦 #{{ data.channel_name }}
         {% else %}
             📌 #{{ data.channel_name }}
-        {% endif %}ock content %}
+        {% endif %}
+{% endblock %}
+
+{% block content %}
 <div style="margin-bottom: 20px;">
-    <a href="{{ url_for('index') }}" class="btn btn-seconda            <!-- Reactions -->
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">← Back to Archives</a>
+</div>
+
+<!-- Archive Header -->
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        {% if data.get('archive_type') == 'full_messages' %}
+            <h1 style="margin: 0; color: #333;">📦 #{{ data.channel_name }} Full Archive</h1>
+            <p style="margin: 10px 0 0; color: #666;">{{ items|length }} messages archived on {{ data.archived_date }}</p>
+        {% else %}
+            <h1 style="margin: 0; color: #333;">📌 #{{ data.channel_name }} Pins</h1>
+            <p style="margin: 10px 0 0; color: #666;">{{ items|length }} pins archived on {{ data.archived_date }}</p>
+        {% endif %}
+</div>
+
+<!-- Search -->
+{% if data.get('archive_type') == 'full_messages' %}
+<div style="margin-bottom: 20px;">
+    <input type="text" id="searchInput" placeholder="Search messages..." 
+           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+</div>
+{% endif %}
+
+<!-- Messages/Pins -->
+<div id="messageContainer">
+{% if items %}
+    {% for item in items %}
+    <div class="message-item" data-content="{{ item.content|lower }}">
+        <div style="background-color: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; position: relative;">
+            <!-- Author -->
+            <div style="display: flex; align-items: center; margin-bottom: 10px; gap: 10px;">
+                {% if item.author.avatar_url %}
+                <img src="{{ item.author.avatar_url }}" alt="{{ item.author.display_name }}" 
+                     style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid #ddd;">
+                {% endif %}
+                <div>
+                    <strong style="color: #333;">{{ item.author.display_name }}</strong>
+                    <div style="font-size: 12px; color: #666;">
+                        {{ item.timestamp }}
+                        {% if item.get('is_pinned') %}
+                        <span style="color: #ff6b6b;">• 📌 Pinned</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content -->
+            {% if item.content %}
+            <div style="margin-bottom: 15px; color: #333; line-height: 1.6;">
+                {{ item.content|replace('\n', '<br>')|safe }}
+                {% if item.attachments %}
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                    📎 {{ item.attachments|length }} attachment(s)
+                </div>
+                {% endif %}
+            {% endif %}
             {% if item.reactions %}
             <div style="margin-bottom: 15px;">
                 <h4 style="margin-bottom: 10px; color: #333;">💝 Reactions:</h4>
