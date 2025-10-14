@@ -20,6 +20,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 GUILD_ID = None  # Set to None for global commands, or specify server ID for faster sync
 TIMEZONE = "America/Los_Angeles"  # Change this to your timezone
 SCHEDULES_FILE = "schedules.json"
+PINS_DATA_DIR = "pins_data"  # Directory to store pin JSON files
 
 # Dictionary to store scheduled resets: {channel_name: [{'hour': X, 'minute': Y, 'type': 'text/voice', 'category': 'category_name', 'last_reset': 'YYYY-MM-DD-HH:MM'}]}
 scheduled_resets = {}
@@ -63,6 +64,71 @@ def save_schedules():
             json.dump(scheduled_resets, f, indent=2)
     except Exception as e:
         print(f"Error saving schedules: {e}")
+
+def save_pins_to_json(channel_name, pins):
+    """Save pinned messages to JSON file"""
+    try:
+        # Create pins data directory if it doesn't exist
+        os.makedirs(PINS_DATA_DIR, exist_ok=True)
+        
+        # Prepare pins data
+        pins_data = {
+            "channel_name": channel_name,
+            "reset_timestamp": datetime.datetime.now().isoformat(),
+            "pin_count": len(pins),
+            "pins": []
+        }
+        
+        # Extract data from each pin
+        for pin in reversed(pins):  # Reverse to keep chronological order
+            try:
+                pin_data = {
+                    "id": pin.id,
+                    "author": {
+                        "name": pin.author.display_name,
+                        "username": str(pin.author),
+                        "id": pin.author.id,
+                        "avatar_url": str(pin.author.display_avatar.url) if pin.author.display_avatar else None
+                    },
+                    "content": pin.content,
+                    "created_at": pin.created_at.isoformat(),
+                    "jump_url": pin.jump_url,
+                    "attachments": [
+                        {
+                            "filename": att.filename,
+                            "url": att.url,
+                            "size": att.size,
+                            "content_type": att.content_type
+                        }
+                        for att in pin.attachments
+                    ],
+                    "embeds": [embed.to_dict() for embed in pin.embeds] if pin.embeds else [],
+                    "reactions": [
+                        {
+                            "emoji": str(reaction.emoji),
+                            "count": reaction.count
+                        }
+                        for reaction in pin.reactions
+                    ] if pin.reactions else []
+                }
+                pins_data["pins"].append(pin_data)
+            except Exception as e:
+                print(f"Error processing pin {pin.id}: {e}")
+        
+        # Save to file with timestamp in filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{channel_name}_{timestamp}.json"
+        filepath = os.path.join(PINS_DATA_DIR, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(pins_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"Saved {len(pins)} pins to {filepath}")
+        return filepath
+        
+    except Exception as e:
+        print(f"Error saving pins to JSON: {e}")
+        return None
 
 @bot.event
 async def on_ready():
@@ -242,6 +308,9 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
             archived_count = 0
             
             if pinned_count > 0:
+                # Save pins to JSON file for web interface
+                json_file = save_pins_to_json(channel_name, pins)
+                
                 # Find or create archive channel BEFORE deleting the main channel
                 archive_channel = discord.utils.get(guild.text_channels, name=archive_name)
                 if not archive_channel:
@@ -271,6 +340,8 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
                         print(f"Error forwarding pin {pin.id}: {e}")
                 
                 print(f"Forwarded {archived_count}/{pinned_count} pins to archive")
+                if json_file:
+                    print(f"Also saved pins to JSON: {json_file}")
             
             # Store channel properties
             channel_category = category or channel.category

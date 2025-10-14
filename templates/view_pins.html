@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">← Back to All Archives</a>
+</div>
+
+<div style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; background-color: #f8f9fa; margin-bottom: 20px;">
+    <h2 style="color: #5865f2; margin-bottom: 10px;">📺 #{data.channel_name}</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px; color: #666;">
+        <div><strong>Reset Date:</strong> {{ data.reset_timestamp[:19].replace('T', ' ') }}</div>
+        <div><strong>Total Pins:</strong> {{ data.pin_count }}</div>
+        <div><strong>Archive File:</strong> {{ filename }}</div>
+    </div>
+</div>
+
+{% if data.pins %}
+    <div style="display: grid; gap: 20px;">
+        {% for pin in data.pins %}
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; background-color: white;">
+            <!-- Author info -->
+            <div style="display: flex; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+                {% if pin.author.avatar_url %}
+                <img src="{{ pin.author.avatar_url }}" alt="Avatar" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px;">
+                {% else %}
+                <div style="width: 40px; height: 40px; border-radius: 50%; background-color: #5865f2; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: 12px;">
+                    {{ pin.author.name[0].upper() }}
+                </div>
+                {% endif %}
+                <div>
+                    <div style="font-weight: bold; color: #333;">{{ pin.author.name }}</div>
+                    <div style="font-size: 12px; color: #666;">{{ pin.created_at[:19].replace('T', ' ') }}</div>
+                </div>
+                {% if pin.jump_url %}
+                <a href="{{ pin.jump_url }}" target="_blank" style="margin-left: auto; padding: 6px 12px; background-color: #5865f2; color: white; text-decoration: none; border-radius: 4px; font-size: 12px;">
+                    Original Message
+                </a>
+                {% endif %}
+            </div>
+
+            <!-- Message content -->
+            {% if pin.content %}
+            <div style="margin-bottom: 15px; line-height: 1.5; white-space: pre-wrap;">{{ pin.content }}</div>
+            {% endif %}
+
+            <!-- Attachments -->
+            {% if pin.attachments %}
+            <div style="margin-bottom: 15px;">
+                <h4 style="margin-bottom: 10px; color: #333;">📎 Attachments ({{ pin.attachments|length }}):</h4>
+                <div style="display: grid; gap: 10px;">
+                    {% for attachment in pin.attachments %}
+                    <div style="border: 1px solid #ddd; border-radius: 5px; padding: 12px; background-color: #f8f9fa;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: bold;">{{ attachment.filename }}</div>
+                                <div style="font-size: 12px; color: #666;">
+                                    {% if attachment.size %}
+                                        {{ "%.2f"|format(attachment.size / 1024 / 1024) }} MB
+                                    {% endif %}
+                                    {% if attachment.content_type %}
+                                        • {{ attachment.content_type }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <a href="{{ attachment.url }}" target="_blank" class="btn" style="padding: 6px 12px; font-size: 14px;">
+                                Download
+                            </a>
+                        </div>
+                        {% if attachment.content_type and attachment.content_type.startswith('image/') %}
+                        <div style="margin-top: 10px;">
+                            <img src="{{ attachment.url }}" alt="{{ attachment.filename }}" style="max-width: 100%; max-height: 300px; border-radius: 4px;">
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Embeds -->
+            {% if pin.embeds %}
+            <div style="margin-bottom: 15px;">
+                <h4 style="margin-bottom: 10px; color: #333;">📄 Embeds ({{ pin.embeds|length }}):</h4>
+                {% for embed in pin.embeds %}
+                <div style="border-left: 4px solid #5865f2; padding: 12px; background-color: #f8f9fa; margin-bottom: 10px; border-radius: 4px;">
+                    {% if embed.title %}
+                    <div style="font-weight: bold; margin-bottom: 8px; color: #333;">{{ embed.title }}</div>
+                    {% endif %}
+                    {% if embed.description %}
+                    <div style="margin-bottom: 8px; color: #555;">{{ embed.description }}</div>
+                    {% endif %}
+                    {% if embed.url %}
+                    <div style="font-size: 12px;">
+                        <a href="{{ embed.url }}" target="_blank" style="color: #5865f2;">{{ embed.url }}</a>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Reactions -->
+            {% if pin.reactions %}
+            <div style="margin-bottom: 10px;">
+                <h4 style="margin-bottom: 8px; color: #333;">👍 Reactions:</h4>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    {% for reaction in pin.reactions %}
+                    <span style="background-color: #f0f0f0; padding: 4px 8px; border-radius: 12px; font-size: 14px;">
+                        {{ reaction.emoji }} {{ reaction.count }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Pin metadata -->
+            <div style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 10px;">
+                Pin ID: {{ pin.id }} • Created: {{ pin.created_at[:19].replace('T', ' ') }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div style="text-align: center; padding: 40px; color: #666;">
+        <h3>No pins found in this archive</h3>
+    </div>
+{% endif %}
+{% endblock %}

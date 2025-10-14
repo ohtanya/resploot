@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 50px auto;">
+    <h2 style="text-align: center; margin-bottom: 30px;">Enter Password</h2>
+    
+    <form method="POST" style="display: flex; flex-direction: column; gap: 20px;">
+        <input 
+            type="password" 
+            name="password" 
+            placeholder="Password" 
+            required 
+            style="padding: 15px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px;"
+            autofocus
+        >
+        
+        <button type="submit" class="btn" style="padding: 15px; font-size: 16px;">
+            🔓 Access Pins
+        </button>
+    </form>
+    
+    <div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px; font-size: 14px; color: #666;">
+        <strong>Note:</strong> Enter the password to view saved Discord pins from channel resets.
+    </div>
+</div>
+{% endblock %}

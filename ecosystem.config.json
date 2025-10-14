@@ -1,6 +1,6 @@
 {
   "apps": [{
-    "name": "resploot",
+    "name": "resploot-bot",
     "script": "bot.py",
     "interpreter": "./venv/bin/python3",
     "cwd": "/home/tanya/resploot",
@@ -11,9 +11,27 @@
     "env": {
       "NODE_ENV": "production"
     },
-    "error_file": "./logs/err.log",
-    "out_file": "./logs/out.log",
-    "log_file": "./logs/combined.log",
+    "error_file": "./logs/bot-err.log",
+    "out_file": "./logs/bot-out.log",
+    "log_file": "./logs/bot-combined.log",
+    "time": true
+  },
+  {
+    "name": "pins-viewer",
+    "script": "pins_viewer.py",
+    "interpreter": "./venv/bin/python3",
+    "cwd": "/home/tanya/resploot",
+    "instances": 1,
+    "autorestart": true,
+    "watch": false,
+    "max_memory_restart": "512M",
+    "env": {
+      "NODE_ENV": "production",
+      "FLASK_ENV": "production"
+    },
+    "error_file": "./logs/viewer-err.log",
+    "out_file": "./logs/viewer-out.log",
+    "log_file": "./logs/viewer-combined.log",
     "time": true
   }]
 }
