@@ -27,8 +27,10 @@ SCHEDULES_FILE = "schedules.json"
 PINS_DATA_DIR = "pins_data"  # Directory to store pin JSON files
 ATTACHMENTS_DIR = "pins_data/attachments"  # Directory to store downloaded attachments
 
-# Pin saving configuration - only save pins from this server (set to None to save from all servers)
-PINS_ENABLED_SERVER_ID = int(os.getenv("PINS_ENABLED_SERVER_ID")) if os.getenv("PINS_ENABLED_SERVER_ID") else None
+# Pin saving configuration - only save pins from these servers (comma-separated list)
+PINS_ENABLED_SERVER_IDS = []
+if os.getenv("PINS_ENABLED_SERVER_IDS"):
+    PINS_ENABLED_SERVER_IDS = [int(x.strip()) for x in os.getenv("PINS_ENABLED_SERVER_IDS").split(",")]
 
 # Dictionary to store scheduled resets: {channel_name: [{'hour': X, 'minute': Y, 'type': 'text/voice', 'category': 'category_name', 'last_reset': 'YYYY-MM-DD-HH:MM'}]}
 scheduled_resets = {}
@@ -415,12 +417,12 @@ async def reset_channel_with_preservation(channel, category=None, channel_type='
             archived_count = 0
             
             if pinned_count > 0:
-                # Save pins to JSON file for web interface (only for authorized server)
+                # Save pins to JSON file for web interface (only for authorized servers)
                 json_file = None
-                if PINS_ENABLED_SERVER_ID is None or guild.id == PINS_ENABLED_SERVER_ID:
+                if not PINS_ENABLED_SERVER_IDS or guild.id in PINS_ENABLED_SERVER_IDS:
                     try:
                         json_file = await save_pins_to_json(channel_name, pins, guild)
-                        print(f"✅ Pins saved to web interface for server: {guild.name}")
+                        print(f"✅ Pins saved to web interface for server: {guild.name} (ID: {guild.id})")
                     except Exception as e:
                         print(f"Error saving pins to JSON: {e}")
                 else:

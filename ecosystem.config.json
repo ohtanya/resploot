@@ -10,7 +10,7 @@
     "max_memory_restart": "1G",
     "env": {
       "NODE_ENV": "production",
-      "PINS_ENABLED_SERVER_ID": "YOUR_DISCORD_SERVER_ID_HERE"
+      "PINS_ENABLED_SERVER_IDS": "1411611160263790626,1379246666284138657"
     },
     "error_file": "./logs/bot-err.log",
     "out_file": "./logs/bot-out.log",
