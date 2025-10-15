@@ -261,14 +261,29 @@ async def save_all_messages_to_json(channel, guild, limit=None):
             
             # Process message data similar to pins but for all messages
             try:
+                # Handle forwarded messages by fetching original content
+                original_message = None
+                if message.reference and message.reference.message_id:
+                    try:
+                        # Try to fetch the original message
+                        original_channel = bot.get_channel(message.reference.channel_id)
+                        if original_channel:
+                            original_message = await original_channel.fetch_message(message.reference.message_id)
+                            print(f"  📨 Found original message for forward: {original_message.id}")
+                    except Exception as e:
+                        print(f"  ⚠ Could not fetch referenced message {message.reference.message_id}: {e}")
+                
+                # Use original message content if this is a forward with no content
+                display_message = original_message if (original_message and not message.content and not message.attachments) else message
+                
                 # Download attachments with robust error handling
                 attachment_data = []
-                if message.attachments:
+                if display_message.attachments:
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     async with aiohttp.ClientSession(
                         timeout=aiohttp.ClientTimeout(total=30, connect=10)
                     ) as session:
-                        for att in message.attachments:
+                        for att in display_message.attachments:
                             try:
                                 # Download with individual timeout per attachment
                                 attachment_info = await asyncio.wait_for(
@@ -308,12 +323,12 @@ async def save_all_messages_to_json(channel, guild, limit=None):
                         "id": message.author.id,
                         "avatar_url": str(message.author.display_avatar.url) if message.author.display_avatar else None
                     },
-                    "content": message.content,
+                    "content": display_message.content,
                     "created_at": message.created_at.isoformat(),
                     "jump_url": message.jump_url,
                     "is_pinned": message.pinned,
                     "attachments": attachment_data,
-                    "embeds": [embed.to_dict() for embed in message.embeds] if message.embeds else [],
+                    "embeds": [embed.to_dict() for embed in display_message.embeds] if display_message.embeds else [],
                     "reactions": [
                         {
                             "emoji": str(reaction.emoji),
@@ -326,7 +341,13 @@ async def save_all_messages_to_json(channel, guild, limit=None):
                         "channel_id": message.reference.channel_id,
                         "guild_id": message.reference.guild_id
                     } if message.reference else None,
-                    "type": str(message.type) if hasattr(message, 'type') else None
+                    "type": str(message.type) if hasattr(message, 'type') else None,
+                    "original_author": {
+                        "name": original_message.author.display_name,
+                        "username": str(original_message.author),
+                        "id": original_message.author.id,
+                        "avatar_url": str(original_message.author.display_avatar.url) if original_message.author.display_avatar else None
+                    } if original_message else None
                 }
                 messages.append(message_data)
                 

@@ -61,6 +61,10 @@
                 <div style="flex: 1;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
                         <strong style="color: #f1f5f9; font-weight: 600;">{{ item.author.name }}</strong>
+                        {% if item.message_reference and item.original_author %}
+                        <span style="color: #94a3b8; font-size: 13px;">forwarded from</span>
+                        <strong style="color: #cbd5e1; font-weight: 500;">{{ item.original_author.name }}</strong>
+                        {% endif %}
                         {% if item.get('is_pinned') %}
                         <span style="background: #451a03; color: #fbbf24; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500;">📌 Pinned</span>
                         {% endif %}
