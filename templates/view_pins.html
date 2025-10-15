@@ -51,22 +51,22 @@
             <!-- Author -->
             <div style="display: flex; align-items: center; margin-bottom: 16px; gap: 12px;">
                 {% if item.author.avatar_url %}
-                <img src="{{ item.author.avatar_url }}" alt="{{ item.author.display_name }}" 
+                <img src="{{ item.author.avatar_url }}" alt="{{ item.author.name }}" 
                      style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid #404040;">
                 {% else %}
                 <div style="width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #6b7280, #4b5563); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px;">
-                    {{ item.author.display_name[0].upper() }}
+                    {{ item.author.name[0].upper() }}
                 </div>
                 {% endif %}
                 <div style="flex: 1;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                        <strong style="color: #f1f5f9; font-weight: 600;">{{ item.author.display_name }}</strong>
+                        <strong style="color: #f1f5f9; font-weight: 600;">{{ item.author.name }}</strong>
                         {% if item.get('is_pinned') %}
                         <span style="background: #451a03; color: #fbbf24; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500;">📌 Pinned</span>
                         {% endif %}
                     </div>
                     <div style="font-size: 13px; color: #94a3b8;">
-                        {{ item.timestamp }}
+                        {{ item.created_at[:19] if item.created_at else '' }}
                     </div>
                 </div>
             </div>
