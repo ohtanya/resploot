@@ -14,8 +14,8 @@
 
 <div id="allPins" style="padding: 24px;">
     <div style="margin-bottom: 32px;">
-        <h2 style="font-size: 28px; font-weight: 600; color: #f1f5f9; margin-bottom: 8px;">Your Archives</h2>
-        <p style="color: #94a3b8; font-size: 16px;">Browse your saved Discord pins and messages</p>
+        <h2 style="font-size: 28px; font-weight: 600; color: #f1f5f9; margin-bottom: 8px;">◆ Your Archives</h2>
+        <p style="color: #94a3b8; font-size: 16px;">Browse your saved pins and messages from Discord</p>
     </div>
     
     {% if archive_files %}
@@ -60,9 +60,9 @@
         </div>
     {% else %}
         <div style="text-align: center; padding: 80px 20px;">
-            <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #475569, #334155); display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; font-size: 32px;">📚</div>
+            <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #475569, #334155); display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; font-size: 32px;">◆</div>
             <h3 style="color: #f1f5f9; font-size: 24px; font-weight: 600; margin-bottom: 12px;">No archives yet</h3>
-            <p style="color: #94a3b8; font-size: 16px; max-width: 400px; margin: 0 auto;">Your archived Discord content will appear here when you use the bot's archive commands.</p>
+            <p style="color: #94a3b8; font-size: 16px; max-width: 400px; margin: 0 auto;">Your Black Diamond Archive content will appear here when you use the bot's archive commands.</p>
         </div>
     {% endif %}
 </div>
@@ -126,7 +126,7 @@ function displaySearchResults(results) {
                      'onmouseout="this.style.transform=\'translateY(0)\'; this.style.boxShadow=\'none\'">' +
                     '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">' +
                         '<div>' +
-                            '<h4 style="color: #f1f5f9; margin-bottom: 4px; font-size: 16px; font-weight: 600;">📺 #' + result.channel + '</h4>' +
+                            '<h4 style="color: #f1f5f9; margin-bottom: 4px; font-size: 16px; font-weight: 600;">◆ #' + result.channel + '</h4>' +
                             '<p style="font-size: 12px; color: #94a3b8;">Archived: ' + resetDate + '</p>' +
                         '</div>' +
                         '<a href="/view/' + result.filename + '" class="btn btn-ghost" style="padding: 6px 12px; font-size: 14px;">View All</a>' +
