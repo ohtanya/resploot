@@ -85,14 +85,55 @@
             </div>
             {% endif %}
 
+            <!-- Images (prominent display for forwarded messages) -->
+            {% if not item.content and item.attachments %}
+            {% set image_attachments = item.attachments|selectattr('content_type', 'defined')|selectattr('content_type', 'match', 'image/.*')|list %}
+            {% if image_attachments %}
+            <div style="margin-bottom: 20px;">
+                <div style="display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                    {% for attachment in image_attachments %}
+                    <div style="border: 1px solid #404040; border-radius: 12px; overflow: hidden; background: #0f0f0f;">
+                        {% if attachment.downloaded and attachment.local_filename %}
+                        <img src="{{ url_for('serve_attachment', filename=attachment.local_filename) }}" 
+                             alt="{{ attachment.filename }}" 
+                             style="width: 100%; max-height: 300px; object-fit: cover; cursor: pointer; transition: transform 0.2s ease;"
+                             onclick="window.open(this.src, '_blank')"
+                             onmouseover="this.style.transform='scale(1.02)'"
+                             onmouseout="this.style.transform='scale(1)'">
+                        <div style="padding: 12px; border-top: 1px solid #404040;">
+                            <div style="font-size: 13px; color: #cbd5e1; font-weight: 500;">{{ attachment.filename }}</div>
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
+                                {% if attachment.size %}{{ "%.1f KB"|format(attachment.size / 1024) }}{% endif %}
+                                {% if attachment.content_type %} • {{ attachment.content_type }}{% endif %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <div style="padding: 20px; text-align: center;">
+                            <div style="font-size: 32px; margin-bottom: 8px;">🖼️</div>
+                            <div style="font-size: 13px; color: #cbd5e1; margin-bottom: 8px;">{{ attachment.filename }}</div>
+                            <a href="{{ attachment.url }}" target="_blank" class="btn btn-ghost" style="padding: 6px 12px; font-size: 12px;">
+                                View External
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
+
             <!-- Attachments -->
             {% if item.attachments %}
+            {% set non_image_attachments = item.attachments|rejectattr('content_type', 'defined')|list + item.attachments|selectattr('content_type', 'defined')|rejectattr('content_type', 'match', 'image/.*')|list %}
+            {% set show_images_here = item.content or not (item.attachments|selectattr('content_type', 'defined')|selectattr('content_type', 'match', 'image/.*')|list) %}
+            {% if non_image_attachments or show_images_here %}
             <div style="margin-bottom: 20px;">
                 <h4 style="margin-bottom: 12px; color: #f1f5f9; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
                     📎 Attachments ({{ item.attachments|length }})
                 </h4>
                 <div style="display: grid; gap: 12px;">
-                    {% for attachment in item.attachments %}
+                    {% for attachment in (item.attachments if show_images_here else non_image_attachments) %}
                     <div style="border: 1px solid #404040; border-radius: 8px; padding: 16px; background: #1a1a1a;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <div style="flex: 1;">
@@ -134,6 +175,7 @@
                     {% endfor %}
                 </div>
             </div>
+            {% endif %}
             {% endif %}
 
             <!-- Embeds -->
