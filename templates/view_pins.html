@@ -64,6 +64,9 @@
                         {% if item.get('is_pinned') %}
                         <span style="background: #451a03; color: #fbbf24; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500;">📌 Pinned</span>
                         {% endif %}
+                        {% if not item.content and item.embeds %}
+                        <span style="background: #1a1a1a; color: #9ca3af; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500;">↗️ Forwarded</span>
+                        {% endif %}
                     </div>
                     <div style="font-size: 13px; color: #94a3b8;">
                         {{ item.created_at[:19] if item.created_at else '' }}
@@ -75,6 +78,10 @@
             {% if item.content %}
             <div style="margin-bottom: 20px; color: #cbd5e1; line-height: 1.6; font-size: 15px;">
                 {{ item.content|replace('\n', '<br>')|safe }}
+            </div>
+            {% elif item.embeds and item.embeds[0].description %}
+            <div style="margin-bottom: 20px; color: #cbd5e1; line-height: 1.6; font-size: 15px; font-style: italic; opacity: 0.9;">
+                {{ item.embeds[0].description|replace('\n', '<br>')|safe }}
             </div>
             {% endif %}
 
