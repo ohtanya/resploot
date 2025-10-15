@@ -215,8 +215,13 @@ async def save_pins_to_json(channel_name, pins, guild):
                                 "emoji": str(reaction.emoji),
                                 "count": reaction.count
                             }
-                            for reaction in pin.reactions
-                        ] if pin.reactions else []
+                            for reaction in pin.reactions                        ] if pin.reactions else [],
+                        "message_reference": {
+                            "message_id": pin.reference.message_id,
+                            "channel_id": pin.reference.channel_id,
+                            "guild_id": pin.reference.guild_id
+                        } if pin.reference else None,
+                        "type": str(pin.type) if hasattr(pin, 'type') else None
                     }
                     pins_data["pins"].append(pin_data)
                 except Exception as e:
@@ -315,7 +320,13 @@ async def save_all_messages_to_json(channel, guild, limit=None):
                             "count": reaction.count
                         }
                         for reaction in message.reactions
-                    ] if message.reactions else []
+                    ] if message.reactions else [],
+                    "message_reference": {
+                        "message_id": message.reference.message_id,
+                        "channel_id": message.reference.channel_id,
+                        "guild_id": message.reference.guild_id
+                    } if message.reference else None,
+                    "type": str(message.type) if hasattr(message, 'type') else None
                 }
                 messages.append(message_data)
                 
@@ -416,8 +427,13 @@ async def save_all_messages_to_json(channel, guild, limit=None):
                                 "emoji": str(reaction.emoji),
                                 "count": reaction.count
                             }
-                            for reaction in pin.reactions
-                        ] if pin.reactions else []
+                            for reaction in pin.reactions                        ] if pin.reactions else [],
+                        "message_reference": {
+                            "message_id": pin.reference.message_id,
+                            "channel_id": pin.reference.channel_id,
+                            "guild_id": pin.reference.guild_id
+                        } if pin.reference else None,
+                        "type": str(pin.type) if hasattr(pin, 'type') else None
                     }
                     pins_data["pins"].append(pin_data)
                 except Exception as e:
