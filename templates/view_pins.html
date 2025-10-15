@@ -87,7 +87,12 @@
 
             <!-- Images (prominent display for forwarded messages) -->
             {% if not item.content and item.attachments %}
-            {% set image_attachments = item.attachments|selectattr('content_type', 'defined')|selectattr('content_type', 'match', 'image/.*')|list %}
+            {% set image_attachments = [] %}
+            {% for attachment in item.attachments %}
+                {% if attachment.content_type and attachment.content_type.startswith('image/') %}
+                    {% set _ = image_attachments.append(attachment) %}
+                {% endif %}
+            {% endfor %}
             {% if image_attachments %}
             <div style="margin-bottom: 20px;">
                 <div style="display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
@@ -125,8 +130,16 @@
 
             <!-- Attachments -->
             {% if item.attachments %}
-            {% set non_image_attachments = item.attachments|rejectattr('content_type', 'defined')|list + item.attachments|selectattr('content_type', 'defined')|rejectattr('content_type', 'match', 'image/.*')|list %}
-            {% set show_images_here = item.content or not (item.attachments|selectattr('content_type', 'defined')|selectattr('content_type', 'match', 'image/.*')|list) %}
+            {% set non_image_attachments = [] %}
+            {% set has_images = false %}
+            {% for attachment in item.attachments %}
+                {% if not attachment.content_type or not attachment.content_type.startswith('image/') %}
+                    {% set _ = non_image_attachments.append(attachment) %}
+                {% else %}
+                    {% set has_images = true %}
+                {% endif %}
+            {% endfor %}
+            {% set show_images_here = item.content or not has_images %}
             {% if non_image_attachments or show_images_here %}
             <div style="margin-bottom: 20px;">
                 <h4 style="margin-bottom: 12px; color: #f1f5f9; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
